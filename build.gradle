@@ -14,7 +14,8 @@ repositories {
 }
 
 def runeLiteVersion = 'latest.release'
-def pluginMainClass = 'com.example.ExamplePluginTest'
+def pluginMainClass = 'net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin'
+
 
 dependencies {
 	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
@@ -37,16 +38,17 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.register('run', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
-	mainClass = pluginMainClass
+	mainClass = "net.runelite.client.RuneLite"
 
 	jvmArgs "-ea"
 	args "--developer-mode", "--debug"
 }
 
+
 tasks.register('shadowJar', Jar) {
 	dependsOn configurations.testRuntimeClasspath
 	manifest {
-		attributes('Main-Class': pluginMainClass, 'Multi-Release': true)
+		attributes('Main-Class': 'net.runelite.client.RuneLite', 'Multi-Release': true)
 	}
 
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
