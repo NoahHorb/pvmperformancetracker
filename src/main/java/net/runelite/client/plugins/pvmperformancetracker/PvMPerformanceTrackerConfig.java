@@ -1,6 +1,7 @@
 package net.runelite.client.plugins.pvmperformancetracker;
 
 import net.runelite.client.config.*;
+import net.runelite.client.plugins.pvmperformancetracker.enums.TrackingMode;
 
 import java.awt.Color;
 
@@ -22,18 +23,18 @@ public interface PvMPerformanceTrackerConfig extends Config
 	String overlaySection = "overlay";
 
 	@ConfigSection(
-			name = "Combat Detection",
-			description = "Combat session detection settings",
+			name = "Party Tracking",
+			description = "Party-wide tracking settings",
 			position = 2
 	)
-	String combatSection = "combat";
+	String partySection = "party";
 
 	@ConfigSection(
-			name = "Statistics",
-			description = "Statistics tracking settings",
+			name = "Combat Detection",
+			description = "Combat session detection settings",
 			position = 3
 	)
-	String statsSection = "statistics";
+	String combatSection = "combat";
 
 	// General Settings
 	@ConfigItem(
@@ -49,15 +50,15 @@ public interface PvMPerformanceTrackerConfig extends Config
 	}
 
 	@ConfigItem(
-			keyName = "trackAllCombat",
-			name = "Track All Combat",
-			description = "Track all combat encounters, not just bosses",
+			keyName = "trackingMode",
+			name = "Tracking Mode",
+			description = "Current Fight (resets per boss) or Overall (manual reset)",
 			position = 1,
 			section = generalSection
 	)
-	default boolean trackAllCombat()
+	default TrackingMode trackingMode()
 	{
-		return true;
+		return TrackingMode.CURRENT_FIGHT;
 	}
 
 	@ConfigItem(
@@ -98,146 +99,85 @@ public interface PvMPerformanceTrackerConfig extends Config
 	}
 
 	@ConfigItem(
-			keyName = "overlayPosition",
-			name = "Overlay Position",
-			description = "Position of the overlay on screen",
+			keyName = "overlayMetric1",
+			name = "Overlay Metric 1",
+			description = "First metric to display in overlay",
 			position = 1,
 			section = overlaySection
 	)
-	default OverlayPosition overlayPosition()
+	default OverlayMetric overlayMetric1()
 	{
-		return OverlayPosition.TOP_RIGHT;
+		return OverlayMetric.DPS;
 	}
 
 	@ConfigItem(
-			keyName = "showDPS",
-			name = "Show DPS",
-			description = "Display current DPS in overlay",
+			keyName = "overlayMetric2",
+			name = "Overlay Metric 2",
+			description = "Second metric to display in overlay",
 			position = 2,
 			section = overlaySection
 	)
-	default boolean showDPS()
+	default OverlayMetric overlayMetric2()
 	{
-		return true;
+		return OverlayMetric.TICKS_LOST;
 	}
 
 	@ConfigItem(
-			keyName ="showTotalDamage",
-			name = "Show Total Damage",
-			description = "Display total damage dealt in overlay",
+			keyName = "highlightAvoidableDamage",
+			name = "Highlight Avoidable Damage",
+			description = "Highlight players with high avoidable damage taken",
 			position = 3,
 			section = overlaySection
 	)
-
-	default boolean showTotalDamage()
+	default boolean highlightAvoidableDamage()
 	{
-		return true;
+		return false;
 	}
 
 	@ConfigItem(
-			keyName = "showAccuracy",
-			name = "Show Accuracy",
-			description = "Display hit accuracy percentage in overlay",
+			keyName = "avoidableDamageThreshold",
+			name = "Avoidable Damage Threshold",
+			description = "Damage threshold for highlighting (if enabled)",
 			position = 4,
 			section = overlaySection
 	)
-	default boolean showAccuracy()
+	@Range(min = 50, max = 1000)
+	default int avoidableDamageThreshold()
+	{
+		return 200;
+	}
+
+	// Party Tracking Settings
+	@ConfigItem(
+			keyName = "enablePartyTracking",
+			name = "Enable Party Tracking",
+			description = "Track performance of party members",
+			position = 0,
+			section = partySection
+	)
+	default boolean enablePartyTracking()
 	{
 		return true;
 	}
 
 	@ConfigItem(
-			keyName = "showMaxHit",
-			name = "Show Max Hit",
-			description = "Display maximum hit in overlay",
-			position = 5,
-			section = overlaySection
+			keyName = "showEstimatedLabel",
+			name = "Show 'Estimated' Label",
+			description = "Label party member stats as estimated",
+			position = 1,
+			section = partySection
 	)
-	default boolean showMaxHit()
+	default boolean showEstimatedLabel()
 	{
 		return true;
-	}
-
-	@ConfigItem(
-			keyName = "showCombatTime",
-			name = "Show Combat Time",
-			description = "Display active combat time in overlay",
-			position = 6,
-			section = overlaySection
-	)
-	default boolean showCombatTime()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-			keyName = "overlayColor",
-			name = "Overlay Color",
-			description = "Color of the overlay text",
-			position = 7,
-			section = overlaySection
-	)
-	default Color overlayColor()
-	{
-		return Color.WHITE;
-	}
-
-	@ConfigItem(
-			keyName = "overlayBackgroundColor",
-			name = "Background Color",
-			description = "Background color of the overlay",
-			position = 8,
-			section = overlaySection
-	)
-	default Color overlayBackgroundColor()
-	{
-		return new Color(0, 0, 0, 128);
 	}
 
 	// Combat Detection Settings
 	@ConfigItem(
-			keyName = "combatTimeout",
-			name = "Combat Timeout (seconds)",
-			description = "Seconds of inactivity before ending combat session",
-			position = 0,
-			section = combatSection
-	)
-	@Range(min = 5, max = 300)
-	default int combatTimeout()
-	{
-		return 30;
-	}
-
-	@ConfigItem(
-			keyName = "minimumCombatTime",
-			name = "Minimum Session Time (seconds)",
-			description = "Minimum combat duration to save session",
-			position = 1,
-			section = combatSection
-	)
-	@Range(min = 1, max = 60)
-	default int minimumCombatTime()
-	{
-		return 5;
-	}
-
-	@ConfigItem(
-			keyName = "endOnDeath",
-			name = "End on Death",
-			description = "End combat session when you die",
-			position = 2,
-			section = combatSection
-	)
-	default boolean endOnDeath()
-	{
-		return true;
-	}
-
-	@ConfigItem(
 			keyName = "endOnBossDeath",
 			name = "End on Boss Death",
-			description = "End combat session when boss dies",
-			position = 3,
+			description = "End current fight when boss dies",
+			position = 0,
 			section = combatSection
 	)
 	default boolean endOnBossDeath()
@@ -245,49 +185,25 @@ public interface PvMPerformanceTrackerConfig extends Config
 		return true;
 	}
 
-	// Statistics Settings
 	@ConfigItem(
-			keyName = "trackByWeapon",
-			name = "Track by Weapon",
-			description = "Break down statistics by weapon type",
-			position = 0,
-			section = statsSection
-	)
-	default boolean trackByWeapon()
-	{
-		return true;
-	}
-
-	@ConfigItem(
-			keyName = "trackByAttackStyle",
-			name = "Track by Attack Style",
-			description = "Break down statistics by attack style (melee/range/magic)",
+			keyName = "minimumFightTime",
+			name = "Minimum Fight Time (ticks)",
+			description = "Minimum fight duration to save (0 = save all)",
 			position = 1,
-			section = statsSection
+			section = combatSection
 	)
-	default boolean trackByAttackStyle()
+	@Range(min = 0, max = 600)
+	default int minimumFightTime()
 	{
-		return true;
-	}
-
-	@ConfigItem(
-			keyName = "trackByEnemy",
-			name = "Track by Enemy",
-			description = "Break down statistics by enemy type",
-			position = 2,
-			section = statsSection
-	)
-	default boolean trackByEnemy()
-	{
-		return true;
+		return 0;
 	}
 
 	@ConfigItem(
 			keyName = "maxSessionHistory",
-			name = "Max Session History",
-			description = "Maximum number of past sessions to keep",
-			position = 3,
-			section = statsSection
+			name = "Max Fight History",
+			description = "Maximum number of past fights to keep",
+			position = 2,
+			section = combatSection
 	)
 	@Range(min = 10, max = 1000)
 	default int maxSessionHistory()
@@ -296,24 +212,40 @@ public interface PvMPerformanceTrackerConfig extends Config
 	}
 
 	@ConfigItem(
-			keyName = "showDamageSplits",
-			name = "Show Damage Splits",
-			description = "Show detailed damage breakdowns by ability/spell",
-			position = 4,
-			section = statsSection
+			keyName = "autoResetOverallOnLogout",
+			name = "Auto Reset Overall on Logout",
+			description = "Automatically reset Overall mode when logging out",
+			position = 3,
+			section = combatSection
 	)
-	default boolean showDamageSplits()
+	default boolean autoResetOverallOnLogout()
 	{
-		return true;
+		return false;
 	}
 
-	enum OverlayPosition
+	/**
+	 * Overlay metric options
+	 */
+	enum OverlayMetric
 	{
-		TOP_LEFT,
-		TOP_CENTER,
-		TOP_RIGHT,
-		BOTTOM_LEFT,
-		BOTTOM_CENTER,
-		BOTTOM_RIGHT
+		DPS("DPS"),
+		TICKS_LOST("Ticks Lost"),
+		DAMAGE_TAKEN("Damage Taken"),
+		AVOIDABLE_DAMAGE("Avoidable Damage"),
+		PRAYABLE_DAMAGE("Prayable Damage"),
+		UNAVOIDABLE_DAMAGE("Unavoidable Damage");
+
+		private final String displayName;
+
+		OverlayMetric(String displayName)
+		{
+			this.displayName = displayName;
+		}
+
+		@Override
+		public String toString()
+		{
+			return displayName;
+		}
 	}
 }

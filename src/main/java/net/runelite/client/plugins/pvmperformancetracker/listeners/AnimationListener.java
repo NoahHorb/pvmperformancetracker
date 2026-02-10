@@ -6,8 +6,9 @@ import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.CombatSessionManager;
-import net.runelite.client.plugins.pvmperformancetracker.model.CombatSession;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.WeaponSpeedHelper;
+import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -18,40 +19,45 @@ public class AnimationListener
     private final PvMPerformanceTrackerPlugin plugin;
     private final Client client;
 
-    // Common attack animations
-    private static final Set<Integer> MELEE_ANIMATIONS = new HashSet<>();
-    private static final Set<Integer> RANGED_ANIMATIONS = new HashSet<>();
-    private static final Set<Integer> MAGIC_ANIMATIONS = new HashSet<>();
+    // Common attack animations (expanded list)
+    private static final Set<Integer> ATTACK_ANIMATIONS = new HashSet<>();
 
     static
     {
         // Melee animations
-        MELEE_ANIMATIONS.add(422);  // Unarmed punch
-        MELEE_ANIMATIONS.add(423);  // Unarmed kick
-        MELEE_ANIMATIONS.add(401);  // Bronze-Rune swords
-        MELEE_ANIMATIONS.add(406);  // Dragon longsword
-        MELEE_ANIMATIONS.add(407);  // Dragon dagger
-        MELEE_ANIMATIONS.add(428);  // Staff bash
-        MELEE_ANIMATIONS.add(440);  // Pickaxe
-        MELEE_ANIMATIONS.add(1658); // Whip
-        MELEE_ANIMATIONS.add(1378); // Dragon scimitar
-        MELEE_ANIMATIONS.add(7514); // Godsword
-        MELEE_ANIMATIONS.add(8145); // Rapier
-        MELEE_ANIMATIONS.add(4230); // Scythe
+        ATTACK_ANIMATIONS.add(422);  // Unarmed punch
+        ATTACK_ANIMATIONS.add(423);  // Unarmed kick
+        ATTACK_ANIMATIONS.add(401);  // Bronze-Rune swords
+        ATTACK_ANIMATIONS.add(406);  // Dragon longsword
+        ATTACK_ANIMATIONS.add(407);  // Dragon dagger
+        ATTACK_ANIMATIONS.add(428);  // Staff bash
+        ATTACK_ANIMATIONS.add(440);  // Pickaxe
+        ATTACK_ANIMATIONS.add(1658); // Whip
+        ATTACK_ANIMATIONS.add(1378); // Dragon scimitar
+        ATTACK_ANIMATIONS.add(7514); // Godsword
+        ATTACK_ANIMATIONS.add(8145); // Rapier
+        ATTACK_ANIMATIONS.add(4230); // Scythe
+        ATTACK_ANIMATIONS.add(8056); // Scythe 2
+        ATTACK_ANIMATIONS.add(390);  // Staff
+        ATTACK_ANIMATIONS.add(386);  // 2h sword
 
         // Ranged animations
-        RANGED_ANIMATIONS.add(426);  // Shortbow
-        RANGED_ANIMATIONS.add(5061); // Blowpipe
-        RANGED_ANIMATIONS.add(7617); // Crossbow
-        RANGED_ANIMATIONS.add(7552); // Ballista
-        RANGED_ANIMATIONS.add(8291); // Bow of faerdhinen
+        ATTACK_ANIMATIONS.add(426);  // Shortbow
+        ATTACK_ANIMATIONS.add(5061); // Blowpipe
+        ATTACK_ANIMATIONS.add(7617); // Crossbow
+        ATTACK_ANIMATIONS.add(7552); // Ballista
+        ATTACK_ANIMATIONS.add(8291); // Bow of faerdhinen
+        ATTACK_ANIMATIONS.add(929);  // Longbow
+        ATTACK_ANIMATIONS.add(7554); // Heavy ballista
+        ATTACK_ANIMATIONS.add(7555); // Light ballista
 
         // Magic animations
-        MAGIC_ANIMATIONS.add(1162); // Standard spell
-        MAGIC_ANIMATIONS.add(1167); // Ancient spell
-        MAGIC_ANIMATIONS.add(1978); // Powered staff
-        MAGIC_ANIMATIONS.add(8532); // Trident
-        MAGIC_ANIMATIONS.add(7855); // Sanguinesti staff
+        ATTACK_ANIMATIONS.add(1162); // Standard spell
+        ATTACK_ANIMATIONS.add(1167); // Ancient spell
+        ATTACK_ANIMATIONS.add(1978); // Powered staff
+        ATTACK_ANIMATIONS.add(8532); // Trident
+        ATTACK_ANIMATIONS.add(7855); // Sanguinesti staff
+        ATTACK_ANIMATIONS.add(9493); // Tumeken's shadow
     }
 
     public AnimationListener(PvMPerformanceTrackerPlugin plugin)
@@ -76,71 +82,127 @@ public class AnimationListener
         }
 
         Player player = (Player) actor;
-
-        // Only track local player
-        if (!player.equals(client.getLocalPlayer()))
-        {
-            return;
-        }
-
         int animationId = player.getAnimation();
 
         // Check if this is an attack animation
         if (isAttackAnimation(animationId))
         {
-            handleAttackAnimation(animationId);
+            handleAttackAnimation(player, animationId);
         }
     }
 
     private boolean isAttackAnimation(int animationId)
     {
-        return MELEE_ANIMATIONS.contains(animationId) ||
-                RANGED_ANIMATIONS.contains(animationId) ||
-                MAGIC_ANIMATIONS.contains(animationId);
+        return ATTACK_ANIMATIONS.contains(animationId);
     }
 
-    private void handleAttackAnimation(int animationId)
+    private void handleAttackAnimation(Player player, int animationId)
     {
-        CombatSessionManager sessionManager = plugin.getSessionManager();
+        FightTracker fightTracker = plugin.getFightTracker();
 
-        // Get or create session
-        CombatSession session = sessionManager.getCurrentSession();
-
-        if (session == null && plugin.getConfig().autoStartCombat())
+        // Only record if there's an active fight
+        if (fightTracker == null || !fightTracker.hasActiveFight())
         {
-            // Only auto-start if player is actually targeting an NPC
-            if (plugin.getDamageCalculator().isInCombat())
-            {
-                sessionManager.startNewSession();
-                session = sessionManager.getCurrentSession();
-            }
+            return;
         }
 
-        if (session != null && session.isActive())
+        String playerName = player.getName();
+        if (playerName == null)
         {
-            // Increment attack counter
-            session.incrementAttacks();
-            session.updateLastActivity();
-
-            log.debug("Recorded attack animation: {}", animationId);
+            return;
         }
+
+        // Get weapon speed
+        int weaponSpeed;
+        if (player.equals(client.getLocalPlayer()))
+        {
+            // For local player, we can accurately get weapon speed
+            WeaponSpeedHelper weaponHelper = plugin.getWeaponSpeedHelper();
+            weaponSpeed = weaponHelper != null ? weaponHelper.getAdjustedWeaponSpeed() : 4;
+        }
+        else
+        {
+            // For party members, estimate based on animation
+            weaponSpeed = estimateWeaponSpeedFromAnimation(animationId);
+        }
+
+        // Record the attack
+        fightTracker.recordAttack(playerName, weaponSpeed);
+
+        log.debug("{} attacked with animation {} (weapon speed: {} ticks)",
+                playerName, animationId, weaponSpeed);
+    }
+
+    /**
+     * Estimate weapon speed based on attack animation
+     * Used for party members where we can't see their equipment
+     */
+    private int estimateWeaponSpeedFromAnimation(int animationId)
+    {
+        // Blowpipe - 2 ticks
+        if (animationId == 5061)
+        {
+            return 2;
+        }
+
+        // Whip, scimitars, daggers - 4 ticks
+        if (animationId == 1658 || animationId == 1378 || animationId == 407 || animationId == 422)
+        {
+            return 4;
+        }
+
+        // Scythe - 5 ticks
+        if (animationId == 4230 || animationId == 8056)
+        {
+            return 5;
+        }
+
+        // Godswords, 2h - 6 ticks
+        if (animationId == 7514 || animationId == 386)
+        {
+            return 6;
+        }
+
+        // Crossbow - 6 ticks
+        if (animationId == 7617)
+        {
+            return 6;
+        }
+
+        // Ballista - 6 ticks
+        if (animationId == 7552 || animationId == 7554 || animationId == 7555)
+        {
+            return 6;
+        }
+
+        // Bow - 5 ticks (average)
+        if (animationId == 426 || animationId == 929 || animationId == 8291)
+        {
+            return 5;
+        }
+
+        // Magic - 5 ticks (most spells)
+        if (animationId == 1162 || animationId == 1167 || animationId == 1978)
+        {
+            return 5;
+        }
+
+        // Trident, Sanguinesti - 4 ticks
+        if (animationId == 8532 || animationId == 7855)
+        {
+            return 4;
+        }
+
+        // Default
+        return 4;
     }
 
     /**
      * Add custom attack animation ID
      */
-    public static void addMeleeAnimation(int animationId)
+    public static void addAttackAnimation(int animationId)
     {
-        MELEE_ANIMATIONS.add(animationId);
-    }
-
-    public static void addRangedAnimation(int animationId)
-    {
-        RANGED_ANIMATIONS.add(animationId);
-    }
-
-    public static void addMagicAnimation(int animationId)
-    {
-        MAGIC_ANIMATIONS.add(animationId);
+        ATTACK_ANIMATIONS.add(animationId);
+        log.debug("Added custom attack animation: {}", animationId);
     }
 }

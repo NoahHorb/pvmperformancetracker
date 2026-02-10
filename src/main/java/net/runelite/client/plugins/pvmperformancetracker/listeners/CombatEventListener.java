@@ -3,10 +3,9 @@ package net.runelite.client.plugins.pvmperformancetracker.listeners;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ActorDeath;
-import net.runelite.api.events.InteractingChanged;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.CombatSessionManager;
-import net.runelite.client.plugins.pvmperformancetracker.model.CombatSession;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
+import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
 
 @Slf4j
 public class CombatEventListener
@@ -20,6 +19,9 @@ public class CombatEventListener
         this.client = plugin.getClient();
     }
 
+    /**
+     * Handle actor deaths - this is where fights END
+     */
     public void onActorDeath(ActorDeath event)
     {
         if (!plugin.getConfig().enableTracking())
@@ -29,148 +31,85 @@ public class CombatEventListener
 
         Actor actor = event.getActor();
 
-        // Check if player died
-        if (actor.equals(client.getLocalPlayer()))
-        {
-            handlePlayerDeath();
-            return;
-        }
-
-        // Check if an NPC died
+        // Check if an NPC died - END FIGHT on NPC death
         if (actor instanceof NPC)
         {
             handleNPCDeath((NPC) actor);
         }
-    }
 
-    public void onInteractingChanged(InteractingChanged event)
-    {
-        if (!plugin.getConfig().enableTracking())
+        // Check if player died (local player)
+        if (actor.equals(client.getLocalPlayer()))
         {
-            return;
-        }
-
-        Actor source = event.getSource();
-        Actor target = event.getTarget();
-
-        // Only track when local player starts/stops interacting
-        if (!source.equals(client.getLocalPlayer()))
-        {
-            return;
-        }
-
-        // Player started attacking an NPC
-        if (target instanceof NPC)
-        {
-            handleCombatStart((NPC) target);
-        }
-        // Player stopped attacking (target is null)
-        else if (target == null)
-        {
-            handleCombatStop();
+            handlePlayerDeath();
         }
     }
 
-    private void handlePlayerDeath()
-    {
-        log.debug("Player died");
-
-        CombatSessionManager sessionManager = plugin.getSessionManager();
-
-        if (plugin.getConfig().endOnDeath() && sessionManager.hasActiveSession())
-        {
-            log.debug("Ending session due to player death");
-            sessionManager.endCurrentSession();
-        }
-    }
-
+    /**
+     * NPC died - check if it's our current fight target and end fight
+     */
     private void handleNPCDeath(NPC npc)
     {
-        CombatSessionManager sessionManager = plugin.getSessionManager();
-        CombatSession session = sessionManager.getCurrentSession();
+        FightTracker fightTracker = plugin.getFightTracker();
+        if (fightTracker == null)
+        {
+            return;
+        }
 
-        if (session == null || !session.isActive())
+        Fight currentFight = fightTracker.getCurrentFight();
+
+        if (currentFight == null || !currentFight.isActive())
         {
             return;
         }
 
         String npcName = npc.getName();
+        int npcId = npc.getId();
 
-        // Check if this NPC was the primary target
-        if (npcName != null && npcName.equals(session.getPrimaryTarget()))
+        // Check if this NPC is our current fight target
+        // IMPORTANT: Only end fight if this is the EXACT NPC we're fighting
+        boolean isCurrentTarget = (npcId == currentFight.getBossNpcId() &&
+                npcName != null &&
+                npcName.equals(currentFight.getBossName()));
+
+        // Additional check: did we actually deal damage to this NPC?
+        // This prevents other players' kills from ending our fight
+        boolean weAttackedThisNPC = currentFight.getTotalDamage() > 0;
+
+        if (isCurrentTarget && weAttackedThisNPC)
         {
-            log.debug("Primary target {} died", npcName);
+            log.debug("Fight target {} died, ending fight", npcName);
 
-            // End session if configured to end on boss death
-            if (plugin.getConfig().endOnBossDeath() &&
-                    plugin.getBossDetectionHelper().isBoss(npc))
+            // End the fight on killing blow
+            if (plugin.getConfig().endOnBossDeath())
             {
-                log.debug("Ending session due to boss death");
-                sessionManager.endCurrentSession();
+                fightTracker.endCurrentFight();
             }
+        }
+        else if (npcId == currentFight.getBossNpcId())
+        {
+            // Same NPC type died but we didn't attack it (someone else killed it)
+            log.debug("NPC {} died nearby but not our target (no damage dealt)", npcName);
         }
     }
 
-    private void handleCombatStart(NPC npc)
+    /**
+     * Player died - optionally end fight
+     */
+    private void handlePlayerDeath()
     {
-        CombatSessionManager sessionManager = plugin.getSessionManager();
+        log.debug("Local player died");
 
-        // Don't start a new session if one is already active
-        if (sessionManager.hasActiveSession())
+        FightTracker fightTracker = plugin.getFightTracker();
+        if (fightTracker == null)
         {
             return;
         }
 
-        // Check if we should track this NPC
-        if (!shouldStartSessionForNPC(npc))
+        // End fight if player dies (configurable)
+        if (fightTracker.hasActiveFight())
         {
-            return;
+            log.debug("Ending fight due to player death");
+            fightTracker.endCurrentFight();
         }
-
-        if (plugin.getConfig().autoStartCombat())
-        {
-            log.debug("Auto-starting combat session for {}", npc.getName());
-            sessionManager.startNewSession();
-
-            // Set the primary target
-            CombatSession session = sessionManager.getCurrentSession();
-            if (session != null)
-            {
-                session.setPrimaryTarget(npc.getName());
-            }
-        }
-    }
-
-    private void handleCombatStop()
-    {
-        CombatSessionManager sessionManager = plugin.getSessionManager();
-
-        // Just update activity time, let the timeout handle ending the session
-        if (sessionManager.hasActiveSession())
-        {
-            log.debug("Player stopped attacking, session will timeout if no further activity");
-        }
-    }
-
-    private boolean shouldStartSessionForNPC(NPC npc)
-    {
-        if (npc == null || npc.getName() == null)
-        {
-            return false;
-        }
-
-        // If tracking bosses only, check if this is a boss
-        if (plugin.getConfig().trackBossesOnly())
-        {
-            return plugin.getBossDetectionHelper().isBoss(npc);
-        }
-
-        // If tracking all combat, return true
-        if (plugin.getConfig().trackAllCombat())
-        {
-            return true;
-        }
-
-        return false;
     }
 }

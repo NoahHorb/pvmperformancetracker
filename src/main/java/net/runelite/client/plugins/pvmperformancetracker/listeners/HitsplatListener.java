@@ -4,11 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
-import net.runelite.client.plugins.pvmperformancetracker.enums.AttackStyle;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.CombatSessionManager;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.DamageCalculator;
-import net.runelite.client.plugins.pvmperformancetracker.model.CombatSession;
-import net.runelite.client.plugins.pvmperformancetracker.model.DamageEntry;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
+import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
+import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
 
 @Slf4j
 public class HitsplatListener
@@ -32,97 +30,171 @@ public class HitsplatListener
         Actor target = event.getActor();
         Hitsplat hitsplat = event.getHitsplat();
 
-        // Only track hitsplats on NPCs from the player
-        if (!(target instanceof NPC))
+        // Handle damage TO NPCs (offensive tracking)
+        if (target instanceof NPC)
         {
-            return;
+            handleDamageToNPC((NPC) target, hitsplat);
         }
 
-        // Check if this hitsplat is from the local player
-        if (!isPlayerHitsplat(hitsplat))
+        // Handle damage TO players (defensive tracking - local player only)
+        if (target instanceof Player && target.equals(client.getLocalPlayer()))
         {
-            return;
+            handleDamageToPlayer(hitsplat);
         }
+    }
 
-        NPC npc = (NPC) target;
-
+    /**
+     * Handle damage dealt to NPCs - this is where fights start
+     */
+    private void handleDamageToNPC(NPC npc, Hitsplat hitsplat)
+    {
         // Check if we should track this NPC
         if (!shouldTrackNPC(npc))
         {
             return;
         }
 
-        // Get or create combat session
-        CombatSessionManager sessionManager = plugin.getSessionManager();
-        CombatSession session = sessionManager.getCurrentSession();
-
-        if (session == null && plugin.getConfig().autoStartCombat())
-        {
-            sessionManager.startNewSession();
-            session = sessionManager.getCurrentSession();
-        }
-
-        if (session == null || !session.isActive())
+        // Only track player damage hitsplats
+        if (!isPlayerDamageHitsplat(hitsplat))
         {
             return;
         }
 
-        // Process the hitsplat
-        processHitsplat(hitsplat, npc, session);
-    }
-
-    private void processHitsplat(Hitsplat hitsplat, NPC npc, CombatSession session)
-    {
         int damage = hitsplat.getAmount();
-
-        // Get current weapon and attack style
-        DamageCalculator calculator = plugin.getDamageCalculator();
-        String weapon = calculator.getCurrentWeapon();
-        AttackStyle attackStyle = calculator.getCurrentAttackStyle();
-
         String targetName = npc.getName();
+        int targetId = npc.getId();
 
-        // Create damage entry
-        DamageEntry entry = new DamageEntry(
-                damage,
-                targetName,
-                weapon,
-                attackStyle
-        );
+        // Try to determine which player dealt this damage
+        String playerName = determineHitsplatSource(npc);
 
-        // Add to session
-        session.addDamage(entry);
-
-        // Update session activity
-        session.updateLastActivity();
-
-        // Update panel
-        if (plugin.getPanel() != null)
+        if (playerName == null)
         {
-            plugin.getPanel().updatePanel();
+            return;
         }
 
-        log.debug("Recorded damage: {} to {} with {} ({})",
-                damage, targetName, weapon, attackStyle.getDisplayName());
+        FightTracker fightTracker = plugin.getFightTracker();
+        if (fightTracker == null)
+        {
+            return;
+        }
+
+        // START FIGHT ON FIRST HITSPLAT
+        // If no active fight, or active fight is against a different NPC, start new fight
+        Fight currentFight = fightTracker.getCurrentFight();
+
+        if (currentFight == null || !currentFight.isActive())
+        {
+            // No active fight - start new one on this first hitsplat
+            log.debug("Starting new fight on first hitsplat to {} (damage: {})", targetName, damage);
+            fightTracker.startNewFight(targetName, targetId);
+            currentFight = fightTracker.getCurrentFight();
+        }
+        else if (currentFight.getBossNpcId() != targetId)
+        {
+            // Different target than current fight
+            // In multi-combat, we need to decide: continue current fight or start new one?
+            // For now: if this is a boss and current isn't, switch to boss
+            // Otherwise, continue current fight and just track damage to this NPC too
+
+            boolean currentIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
+            boolean newTargetIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
+
+            if (newTargetIsBoss && !currentIsBoss)
+            {
+                // Switch to boss target
+                log.debug("Switching fight from {} to boss {}", currentFight.getBossName(), targetName);
+                fightTracker.endCurrentFight();
+                fightTracker.startNewFight(targetName, targetId);
+                currentFight = fightTracker.getCurrentFight();
+            }
+            // Otherwise continue current fight, damage will be tracked under current fight
+        }
+
+        // Record the damage (even if 0)
+        if (currentFight != null && currentFight.isActive())
+        {
+            fightTracker.addDamageDealt(playerName, damage, targetName);
+            log.debug("{} dealt {} damage to {} (fight: {})",
+                    playerName, damage, targetName, currentFight.getBossName());
+        }
     }
 
-    private boolean isPlayerHitsplat(Hitsplat hitsplat)
+    /**
+     * Handle damage taken by the local player
+     */
+    private void handleDamageToPlayer(Hitsplat hitsplat)
     {
-        // Check if this is a damage hitsplat (not heal, poison, etc.)
-        if (hitsplat.getHitsplatType() != HitsplatID.DAMAGE_ME &&
-                hitsplat.getHitsplatType() != HitsplatID.BLOCK_ME &&
-                hitsplat.getHitsplatType() != HitsplatID.DAMAGE_ME_CYAN &&
-                hitsplat.getHitsplatType() != HitsplatID.DAMAGE_ME_ORANGE &&
-                hitsplat.getHitsplatType() != HitsplatID.DAMAGE_ME_YELLOW &&
-                hitsplat.getHitsplatType() != HitsplatID.DAMAGE_ME_WHITE)
-        {
-            // Not a player damage hitsplat
-            return false;
-        }
-
-        return true;
+        // TODO: Implement defensive tracking
+        // This will require damage classification using DamageClassifier
+        // Need to track:
+        // - Source NPC
+        // - Animation/projectile
+        // - Player's active prayer
+        // - Classify as Avoidable/Prayable/Unavoidable
     }
 
+    /**
+     * Determine which player caused the hitsplat
+     * Priority: local player > party members
+     */
+    private String determineHitsplatSource(NPC target)
+    {
+        Player localPlayer = client.getLocalPlayer();
+
+        // Check if local player is attacking this NPC
+        if (localPlayer != null && localPlayer.getInteracting() == target)
+        {
+            return localPlayer.getName();
+        }
+
+        // Check party members if party tracking is enabled
+        PartyStatsManager partyManager = plugin.getPartyStatsManager();
+        if (partyManager != null && partyManager.isPartyTrackingEnabled())
+        {
+            // Check nearby party members
+            for (Player player : partyManager.getNearbyPartyMembers())
+            {
+                if (player.getInteracting() == target)
+                {
+                    return player.getName();
+                }
+            }
+        }
+
+        // Fallback: if no one is interacting but local player is in combat, assume it's them
+        if (localPlayer != null)
+        {
+            // Check if player recently attacked (within last few ticks)
+            Actor playerTarget = localPlayer.getInteracting();
+            if (playerTarget == null || playerTarget == target)
+            {
+                // No current target or same target - likely this player
+                return localPlayer.getName();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if hitsplat is player damage
+     */
+    private boolean isPlayerDamageHitsplat(Hitsplat hitsplat)
+    {
+        int type = hitsplat.getHitsplatType();
+
+        return type == HitsplatID.DAMAGE_ME ||
+                type == HitsplatID.DAMAGE_MAX_ME ||  // Max hit (bright red)
+                type == HitsplatID.BLOCK_ME ||
+                type == HitsplatID.DAMAGE_ME_CYAN ||
+                type == HitsplatID.DAMAGE_ME_ORANGE ||
+                type == HitsplatID.DAMAGE_ME_YELLOW ||
+                type == HitsplatID.DAMAGE_ME_WHITE;
+    }
+
+    /**
+     * Check if we should track this NPC
+     */
     private boolean shouldTrackNPC(NPC npc)
     {
         if (npc == null || npc.getName() == null)
@@ -136,12 +208,6 @@ public class HitsplatListener
             return plugin.getBossDetectionHelper().isBoss(npc);
         }
 
-        // If tracking all combat, return true
-        if (plugin.getConfig().trackAllCombat())
-        {
-            return true;
-        }
-
-        return false;
+        return true;
     }
 }
