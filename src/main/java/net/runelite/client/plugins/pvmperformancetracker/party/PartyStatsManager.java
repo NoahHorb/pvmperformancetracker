@@ -78,6 +78,14 @@ public class PartyStatsManager
     }
 
     /**
+     * Check if a player is a party member (alias for isInParty)
+     */
+    public boolean isPartyMember(String playerName)
+    {
+        return isInParty(playerName);
+    }
+
+    /**
      * Get all party member names
      */
     public Set<String> getPartyMemberNames()

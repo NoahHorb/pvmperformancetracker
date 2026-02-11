@@ -82,6 +82,13 @@ public class AnimationListener
         }
 
         Player player = (Player) actor;
+
+        // CRITICAL: Only track local player OR party members
+        if (!isPartyMemberOrLocal(player))
+        {
+            return; // Skip random nearby players
+        }
+
         int animationId = player.getAnimation();
 
         // Check if this is an attack animation
@@ -89,6 +96,29 @@ public class AnimationListener
         {
             handleAttackAnimation(player, animationId);
         }
+    }
+
+    /**
+     * Check if player is local player or a party member
+     */
+    private boolean isPartyMemberOrLocal(Player player)
+    {
+        Player localPlayer = client.getLocalPlayer();
+
+        // Check if this is the local player
+        if (player.equals(localPlayer))
+        {
+            return true;
+        }
+
+        // Check if this is a party member
+        PartyStatsManager partyManager = plugin.getPartyStatsManager();
+        if (partyManager != null && partyManager.isPartyTrackingEnabled())
+        {
+            return partyManager.isPartyMember(player.getName());
+        }
+
+        return false; // Not local player and not in party
     }
 
     private boolean isAttackAnimation(int animationId)
@@ -134,75 +164,38 @@ public class AnimationListener
     }
 
     /**
-     * Estimate weapon speed based on attack animation
-     * Used for party members where we can't see their equipment
+     * Estimate weapon speed from animation ID for party members
      */
     private int estimateWeaponSpeedFromAnimation(int animationId)
     {
-        // Blowpipe - 2 ticks
-        if (animationId == 5061)
-        {
-            return 2;
-        }
+        // Blowpipe and similar fast weapons
+        if (animationId == 5061) return 2;
 
-        // Whip, scimitars, daggers - 4 ticks
-        if (animationId == 1658 || animationId == 1378 || animationId == 407 || animationId == 422)
-        {
-            return 4;
-        }
+        // Scythes
+        if (animationId == 4230 || animationId == 8056) return 5;
 
-        // Scythe - 5 ticks
-        if (animationId == 4230 || animationId == 8056)
-        {
-            return 5;
-        }
+        // Godswords and 2h weapons
+        if (animationId == 7514 || animationId == 386) return 6;
 
-        // Godswords, 2h - 6 ticks
-        if (animationId == 7514 || animationId == 386)
-        {
-            return 6;
-        }
+        // Whip, scimitars, most 1h melee
+        if (animationId == 1658 || animationId == 1378 || animationId == 401) return 4;
 
-        // Crossbow - 6 ticks
-        if (animationId == 7617)
-        {
-            return 6;
-        }
+        // Crossbows
+        if (animationId == 7617) return 6;
 
-        // Ballista - 6 ticks
-        if (animationId == 7552 || animationId == 7554 || animationId == 7555)
-        {
-            return 6;
-        }
+        // Ballistas
+        if (animationId == 7552 || animationId == 7554 || animationId == 7555) return 7;
 
-        // Bow - 5 ticks (average)
-        if (animationId == 426 || animationId == 929 || animationId == 8291)
-        {
-            return 5;
-        }
+        // Bows
+        if (animationId == 426 || animationId == 929 || animationId == 8291) return 5;
 
-        // Magic - 5 ticks (most spells)
-        if (animationId == 1162 || animationId == 1167 || animationId == 1978)
-        {
-            return 5;
-        }
+        // Magic - most spells
+        if (animationId == 1162 || animationId == 1167 || animationId == 1978) return 5;
 
-        // Trident, Sanguinesti - 4 ticks
-        if (animationId == 8532 || animationId == 7855)
-        {
-            return 4;
-        }
+        // Trident and powered staves
+        if (animationId == 8532 || animationId == 7855 || animationId == 9493) return 4;
 
-        // Default
+        // Default: assume 4 tick weapon
         return 4;
-    }
-
-    /**
-     * Add custom attack animation ID
-     */
-    public static void addAttackAnimation(int animationId)
-    {
-        ATTACK_ANIMATIONS.add(animationId);
-        log.debug("Added custom attack animation: {}", animationId);
     }
 }

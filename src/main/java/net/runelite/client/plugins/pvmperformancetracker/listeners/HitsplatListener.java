@@ -64,12 +64,12 @@ public class HitsplatListener
         String targetName = npc.getName();
         int targetId = npc.getId();
 
-        // Try to determine which player dealt this damage
+        // Try to determine which player dealt this damage (PARTY MEMBERS ONLY)
         String playerName = determineHitsplatSource(npc);
 
         if (playerName == null)
         {
-            return;
+            return; // Not from party member or local player
         }
 
         FightTracker fightTracker = plugin.getFightTracker();
@@ -79,7 +79,6 @@ public class HitsplatListener
         }
 
         // START FIGHT ON FIRST HITSPLAT
-        // If no active fight, or active fight is against a different NPC, start new fight
         Fight currentFight = fightTracker.getCurrentFight();
 
         if (currentFight == null || !currentFight.isActive())
@@ -92,10 +91,6 @@ public class HitsplatListener
         else if (currentFight.getBossNpcId() != targetId)
         {
             // Different target than current fight
-            // In multi-combat, we need to decide: continue current fight or start new one?
-            // For now: if this is a boss and current isn't, switch to boss
-            // Otherwise, continue current fight and just track damage to this NPC too
-
             boolean currentIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
             boolean newTargetIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
 
@@ -107,7 +102,6 @@ public class HitsplatListener
                 fightTracker.startNewFight(targetName, targetId);
                 currentFight = fightTracker.getCurrentFight();
             }
-            // Otherwise continue current fight, damage will be tracked under current fight
         }
 
         // Record the damage (even if 0)
@@ -132,17 +126,11 @@ public class HitsplatListener
     private void handleDamageToPlayer(Hitsplat hitsplat)
     {
         // TODO: Implement defensive tracking
-        // This will require damage classification using DamageClassifier
-        // Need to track:
-        // - Source NPC
-        // - Animation/projectile
-        // - Player's active prayer
-        // - Classify as Avoidable/Prayable/Unavoidable
     }
 
     /**
      * Determine which player caused the hitsplat
-     * Priority: local player > party members
+     * ONLY RETURNS: local player OR party members (NOT random nearby players)
      */
     private String determineHitsplatSource(NPC target)
     {
@@ -154,11 +142,11 @@ public class HitsplatListener
             return localPlayer.getName();
         }
 
-        // Check party members if party tracking is enabled
+        // Check party members ONLY (if party tracking is enabled)
         PartyStatsManager partyManager = plugin.getPartyStatsManager();
         if (partyManager != null && partyManager.isPartyTrackingEnabled())
         {
-            // Check nearby party members
+            // Get party members who are nearby
             for (Player player : partyManager.getNearbyPartyMembers())
             {
                 if (player.getInteracting() == target)
@@ -168,18 +156,8 @@ public class HitsplatListener
             }
         }
 
-        // Fallback: if no one is interacting but local player is in combat, assume it's them
-        if (localPlayer != null)
-        {
-            // Check if player recently attacked (within last few ticks)
-            Actor playerTarget = localPlayer.getInteracting();
-            if (playerTarget == null || playerTarget == target)
-            {
-                // No current target or same target - likely this player
-                return localPlayer.getName();
-            }
-        }
-
+        // NO FALLBACK - if we can't confirm it's local player or party member, return null
+        // This prevents tracking random nearby players
         return null;
     }
 
