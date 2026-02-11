@@ -7,11 +7,17 @@ import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPl
 import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
 import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Slf4j
 public class CombatEventListener
 {
     private final PvMPerformanceTrackerPlugin plugin;
     private final Client client;
+
+    // Track NPCs we've damaged in current fight
+    private final Set<Integer> damagedNpcIndices = new HashSet<>();
 
     public CombatEventListener(PvMPerformanceTrackerPlugin plugin)
     {
@@ -46,6 +52,7 @@ public class CombatEventListener
 
     /**
      * NPC died - check if it's our current fight target and end fight
+     * Uses NPC index tracking to identify which specific NPC we're fighting
      */
     private void handleNPCDeath(NPC npc)
     {
@@ -64,32 +71,59 @@ public class CombatEventListener
 
         String npcName = npc.getName();
         int npcId = npc.getId();
+        int npcIndex = npc.getIndex();
 
-        // Check if this NPC is our current fight target
-        // IMPORTANT: Only end fight if this is the EXACT NPC we're fighting
-        boolean isCurrentTarget = (npcId == currentFight.getBossNpcId() &&
+        // Check if this NPC matches our fight parameters (ID + name)
+        boolean matchesFightParams = (npcId == currentFight.getBossNpcId() &&
                 npcName != null &&
                 npcName.equals(currentFight.getBossName()));
 
-        // Additional check: did we actually deal damage to this NPC?
-        // This prevents other players' kills from ending our fight
-        boolean weAttackedThisNPC = currentFight.getTotalDamage() > 0;
-
-        if (isCurrentTarget && weAttackedThisNPC)
+        if (!matchesFightParams)
         {
-            log.debug("Fight target {} died, ending fight", npcName);
+            return; // Different NPC type entirely
+        }
 
-            // End the fight on killing blow
+        // Check if this is the specific NPC we damaged
+        boolean isOurNPC = damagedNpcIndices.contains(npcIndex);
+
+        if (isOurNPC)
+        {
+            log.debug("Our fight target {} died (index: {}), ending fight", npcName, npcIndex);
+
             if (plugin.getConfig().endOnBossDeath())
             {
                 fightTracker.endCurrentFight();
+                damagedNpcIndices.clear(); // Clear for next fight
             }
         }
-        else if (npcId == currentFight.getBossNpcId())
+        else
         {
-            // Same NPC type died but we didn't attack it (someone else killed it)
-            log.debug("NPC {} died nearby but not our target (no damage dealt)", npcName);
+            // Same NPC type but not one we damaged
+            log.debug("NPC {} died nearby (index: {}) but we didn't damage it (damaged indices: {})",
+                    npcName, npcIndex, damagedNpcIndices);
         }
+    }
+
+    /**
+     * Track that we damaged this NPC
+     * Called from HitsplatListener when we deal damage
+     */
+    public void recordDamageToNPC(NPC npc)
+    {
+        if (npc != null)
+        {
+            damagedNpcIndices.add(npc.getIndex());
+            log.debug("Recorded damage to NPC index: {}", npc.getIndex());
+        }
+    }
+
+    /**
+     * Clear damaged NPC tracking when fight starts
+     */
+    public void onFightStart()
+    {
+        damagedNpcIndices.clear();
+        log.debug("Cleared damaged NPC indices for new fight");
     }
 
     /**
@@ -105,11 +139,12 @@ public class CombatEventListener
             return;
         }
 
-        // End fight if player dies (configurable)
+        // End fight if player dies
         if (fightTracker.hasActiveFight())
         {
             log.debug("Ending fight due to player death");
             fightTracker.endCurrentFight();
+            damagedNpcIndices.clear();
         }
     }
 }

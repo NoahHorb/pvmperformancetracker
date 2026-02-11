@@ -114,6 +114,13 @@ public class HitsplatListener
         if (currentFight != null && currentFight.isActive())
         {
             fightTracker.addDamageDealt(playerName, damage, targetName);
+
+            // Track this NPC for death detection
+            if (plugin.getCombatEventListener() != null)
+            {
+                plugin.getCombatEventListener().recordDamageToNPC(npc);
+            }
+
             log.debug("{} dealt {} damage to {} (fight: {})",
                     playerName, damage, targetName, currentFight.getBossName());
         }

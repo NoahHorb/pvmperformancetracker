@@ -26,6 +26,12 @@ public class PlayerStats
     private Integer lastAttackTick; // Tick of last attack
     private int currentWeaponSpeed; // Current weapon speed (updates each attack)
 
+    // Base stats for Overall mode (locked-in values from completed fights)
+    private int baseDamageDealt;
+    private int baseTotalAttacks;
+    private int baseSuccessfulHits;
+    private int baseAttackingTicksLost;
+
     // Defensive Metrics
     private int avoidableDamageTaken;
     private int prayableDamageTaken;
@@ -49,10 +55,15 @@ public class PlayerStats
         this.totalCombatTicks = 0;
         this.totalAttackingTicks = 0;
         this.attackingTicksLost = 0;
+        this.baseDamageDealt = 0;
+        this.baseTotalAttacks = 0;
+        this.baseSuccessfulHits = 0;
+        this.baseAttackingTicksLost = 0;
         this.avoidableDamageTaken = 0;
         this.prayableDamageTaken = 0;
         this.unavoidableDamageTaken = 0;
         this.isLocalPlayer = false;
+        this.currentWeaponSpeed = 4; // Default
     }
 
     /**
@@ -93,29 +104,27 @@ public class PlayerStats
     /**
      * Add damage taken by this player
      */
-    public void addDamageTaken(int damage, int tick, DamageType damageType, String source)
+    public void addDamageTaken(int damage, int tick, DamageType damageType)
     {
-        DamageInstance instance = new DamageInstance(tick, damage, source);
-        instance.setDamageType(damageType);
-        damageTakenInstances.add(instance);
-
-        // Categorize damage
         switch (damageType)
         {
             case AVOIDABLE:
-                avoidableDamageTaken += damage;
+                this.avoidableDamageTaken += damage;
                 break;
             case PRAYABLE:
-                prayableDamageTaken += damage;
+                this.prayableDamageTaken += damage;
                 break;
             case UNAVOIDABLE:
-                unavoidableDamageTaken += damage;
+                this.unavoidableDamageTaken += damage;
                 break;
-            case UNKNOWN:
-                // Count as unavoidable by default
-                unavoidableDamageTaken += damage;
+            default:
+                // UNKNOWN - don't categorize
                 break;
         }
+
+        DamageInstance instance = new DamageInstance(tick, damage, "Self");
+        instance.setDamageType(damageType);
+        damageTakenInstances.add(instance);
     }
 
     /**
@@ -134,69 +143,6 @@ public class PlayerStats
         // Update last attack tick and weapon speed
         lastAttackTick = currentTick;
         currentWeaponSpeed = weaponSpeed;
-    }
-
-    /**
-     * Calculate DPS based on fight duration
-     */
-    public double calculateDPS(int fightDurationTicks)
-    {
-        if (fightDurationTicks == 0)
-        {
-            return 0.0;
-        }
-
-        // Convert ticks to seconds (600ms per tick = 0.6s)
-        double durationSeconds = fightDurationTicks * 0.6;
-        return damageDealt / durationSeconds;
-    }
-
-    /**
-     * Calculate accuracy percentage
-     */
-    public double getAccuracyPercentage()
-    {
-        if (totalAttacks == 0)
-        {
-            return 0.0;
-        }
-        return (successfulHits / (double) totalAttacks) * 100.0;
-    }
-
-    /**
-     * Calculate ticks lost in real-time during active fight
-     * For ended fights, returns the finalized value
-     * Logic: After each attack, wait {weapon speed} ticks.
-     * If player hasn't attacked by then, start counting ticks lost.
-     */
-    public int calculateTicksLost(int currentTick, boolean fightActive)
-    {
-        // For ended fights, return the finalized value (don't keep accumulating)
-        if (!fightActive)
-        {
-            return attackingTicksLost;
-        }
-
-        // For active fights, calculate real-time
-        if (lastAttackTick == null)
-        {
-            return 0; // No attacks yet, no ticks lost
-        }
-
-        // Calculate how many ticks since last attack
-        int ticksSinceLastAttack = currentTick - lastAttackTick;
-
-        // If we're still within weapon speed cooldown, no ticks lost yet
-        if (ticksSinceLastAttack <= currentWeaponSpeed)
-        {
-            return attackingTicksLost; // Return accumulated ticks lost
-        }
-
-        // We're past the cooldown - calculate how many ticks lost since cooldown ended
-        int ticksOverCooldown = ticksSinceLastAttack - currentWeaponSpeed;
-
-        // Return accumulated + current ticks lost
-        return attackingTicksLost + ticksOverCooldown;
     }
 
     /**
@@ -222,6 +168,68 @@ public class PlayerStats
     }
 
     /**
+     * Calculate ticks lost in real-time during active fight
+     * For ended fights, returns the finalized value
+     * Logic: After each attack, wait {weapon speed} ticks.
+     * If player hasn't attacked by then, start counting ticks lost.
+     */
+    public int calculateTicksLost(int currentTick, boolean fightActive)
+    {
+        // For ended fights, return the finalized value (don't keep accumulating)
+        if (!fightActive)
+        {
+            return attackingTicksLost;
+        }
+
+        // For active fights, calculate real-time
+        if (lastAttackTick == null)
+        {
+            return 0; // No attacks yet, no ticks lost
+        }
+
+        // Calculate how many ticks since last attack
+        int ticksSinceLastAttack = currentTick - lastAttackTick;
+
+        // If we're still within weapon speed cooldown, no new ticks lost
+        if (ticksSinceLastAttack <= currentWeaponSpeed)
+        {
+            return attackingTicksLost; // Return accumulated ticks lost
+        }
+
+        // We're past the cooldown - calculate how many ticks lost since cooldown ended
+        int ticksOverCooldown = ticksSinceLastAttack - currentWeaponSpeed;
+
+        // Return accumulated + current ticks lost
+        return attackingTicksLost + ticksOverCooldown;
+    }
+
+    /**
+     * Calculate DPS
+     */
+    public double calculateDPS(int durationTicks)
+    {
+        if (durationTicks == 0)
+        {
+            return 0.0;
+        }
+
+        double durationSeconds = durationTicks * 0.6;
+        return damageDealt / durationSeconds;
+    }
+
+    /**
+     * Calculate accuracy percentage
+     */
+    public double getAccuracyPercentage()
+    {
+        if (totalAttacks == 0)
+        {
+            return 0.0;
+        }
+        return (successfulHits / (double) totalAttacks) * 100.0;
+    }
+
+    /**
      * Get total damage taken (all types)
      */
     public int getTotalDamageTaken()
@@ -241,10 +249,11 @@ public class PlayerStats
         }
 
         // Finalize ticks lost - lock in the final value
-        if (lastAttackTick != null)
+        if (lastAttackTick != null && firstDamageTick != null)
         {
             // Calculate any remaining ticks lost since last attack
-            int ticksSinceLastAttack = fightDurationTicks - (lastAttackTick - firstDamageTick);
+            int fightEndTick = firstDamageTick + fightDurationTicks;
+            int ticksSinceLastAttack = fightEndTick - lastAttackTick;
 
             if (ticksSinceLastAttack > currentWeaponSpeed)
             {
@@ -271,6 +280,53 @@ public class PlayerStats
 
         this.damageDealtInstances.addAll(other.damageDealtInstances);
         this.damageTakenInstances.addAll(other.damageTakenInstances);
+    }
+
+    /**
+     * Sync Overall stats with current fight for real-time display
+     * Overall shows: base (from previous fights) + current (from active fight)
+     */
+    public void syncWithCurrentFight(PlayerStats currentStats, int currentTick)
+    {
+        // Set displayed values to base + current
+        this.damageDealt = baseDamageDealt + currentStats.getDamageDealt();
+        this.totalAttacks = baseTotalAttacks + currentStats.getTotalAttacks();
+        this.successfulHits = baseSuccessfulHits + currentStats.getSuccessfulHits();
+
+        // Tick loss: base (finalized) + current (real-time)
+        int currentTickLoss = currentStats.calculateTicksLost(currentTick, true);
+        this.attackingTicksLost = baseAttackingTicksLost + currentTickLoss;
+
+        // Copy weapon state for display
+        this.lastAttackTick = currentStats.getLastAttackTick();
+        this.currentWeaponSpeed = currentStats.getCurrentWeaponSpeed();
+
+        // Defensive stats - just current fight for now
+        this.avoidableDamageTaken = currentStats.getAvoidableDamageTaken();
+        this.prayableDamageTaken = currentStats.getPrayableDamageTaken();
+        this.unavoidableDamageTaken = currentStats.getUnavoidableDamageTaken();
+    }
+
+    /**
+     * Lock current fight stats into Overall's base values
+     * Called when a fight ends
+     */
+    public void lockInFightStats(PlayerStats currentStats)
+    {
+        // Add finalized current fight to base
+        baseDamageDealt += currentStats.getDamageDealt();
+        baseTotalAttacks += currentStats.getTotalAttacks();
+        baseSuccessfulHits += currentStats.getSuccessfulHits();
+        baseAttackingTicksLost += currentStats.getAttackingTicksLost();
+
+        // Update displayed values to match base (no current fight now)
+        this.damageDealt = baseDamageDealt;
+        this.totalAttacks = baseTotalAttacks;
+        this.successfulHits = baseSuccessfulHits;
+        this.attackingTicksLost = baseAttackingTicksLost;
+
+        // Reset weapon state since no current fight
+        this.lastAttackTick = null;
     }
 
     /**

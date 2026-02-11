@@ -75,6 +75,8 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	// Listeners
 	private HitsplatListener hitsplatListener;
 	private AnimationListener animationListener;
+
+	@Getter
 	private CombatEventListener combatEventListener;
 
 	@Override

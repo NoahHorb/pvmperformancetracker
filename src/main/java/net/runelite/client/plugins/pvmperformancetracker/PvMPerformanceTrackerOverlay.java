@@ -81,7 +81,7 @@ public class PvMPerformanceTrackerOverlay extends Overlay
         }
 
         // For Overall mode, show even if no activity yet
-        // For Current Fight mode, require activity
+        // For Current Fight mode, show if fight exists (even if ended)
         boolean isOverall = activeFight.getBossName() != null && activeFight.getBossName().equals("Overall");
         if (!isOverall && !activeFight.hasActivity())
         {
@@ -320,11 +320,20 @@ public class PvMPerformanceTrackerOverlay extends Overlay
         // Get current tick from fight tracker
         int currentTick = plugin.getFightTracker().getCurrentTick();
 
-        // Real-time calculation for active fights, finalized value for ended fights
-        int ticksLost = stats.calculateTicksLost(currentTick, fight.isActive());
+        // Check if this is Overall mode
+        boolean isOverall = fight.getBossName() != null && fight.getBossName().equals("Overall");
 
-        // Always show as positive number (formatting adds the minus)
-        return Math.max(0, ticksLost);
+        if (isOverall)
+        {
+            // Overall is already synced with base + current, just return the value
+            return Math.max(0, stats.getAttackingTicksLost());
+        }
+        else
+        {
+            // Current Fight - calculate real-time
+            int ticksLost = stats.calculateTicksLost(currentTick, fight.isActive());
+            return Math.max(0, ticksLost);
+        }
     }
 
     private int getMetricValue(PvMPerformanceTrackerConfig.OverlayMetric metric, PlayerStats stats)

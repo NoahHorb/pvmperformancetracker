@@ -23,12 +23,14 @@ public class FightTracker
     @Getter
     private Fight currentFight;
 
-    // Overall fight - calculated from fight history
+    // Overall fight - persistent object updated every tick
+    @Getter
     private Fight overallFight;
 
     @Getter
     private final List<Fight> fightHistory = new ArrayList<>();
 
+    @Getter
     private int currentTick;
 
     public FightTracker(PvMPerformanceTrackerPlugin plugin, Client client)
@@ -58,7 +60,20 @@ public class FightTracker
 
         log.debug("Started new fight: {} ({})", bossName, bossNpcId);
 
-        // Overall is now calculated from fight history, no need to initialize
+        // Initialize Overall if it doesn't exist
+        if (overallFight == null || !overallFight.isActive())
+        {
+            overallFight = new Fight(currentTick);
+            overallFight.setBossName("Overall");
+            overallFight.setLocalPlayerName(localPlayerName);
+            log.debug("Initialized Overall tracking");
+        }
+
+        // Clear damaged NPC tracking for new fight
+        if (plugin.getCombatEventListener() != null)
+        {
+            plugin.getCombatEventListener().onFightStart();
+        }
 
         updatePanel();
     }
@@ -74,6 +89,12 @@ public class FightTracker
         }
 
         currentFight.endFight(currentTick);
+
+        // Lock current fight stats into Overall's base (so next fight adds to this)
+        if (overallFight != null && overallFight.isActive())
+        {
+            lockCurrentIntoOverall();
+        }
 
         // Check minimum duration requirement (in ticks)
         int minDurationTicks = plugin.getConfig().minimumFightTime();
@@ -99,175 +120,187 @@ public class FightTracker
                     minDurationTicks);
         }
 
-    updatePanel();
-}
+        // DON'T null out currentFight - keep it displayed until new fight starts
+        // currentFight = null; // REMOVED
 
-/**
- * Reset overall tracking by clearing fight history
- */
-public void resetOverallTracking()
-{
-    clearHistory();
-    log.debug("Reset overall tracking (cleared fight history)");
-}
-
-/**
- * Update current tick (called every game tick)
- */
-public void onGameTick()
-{
-    currentTick++;
-
-    if (currentFight != null && currentFight.isActive())
-    {
-        currentFight.updateCurrentTick(currentTick);
+        updatePanel();
     }
 
-    // Overall is calculated from fight history, no need to track ticks
-    // No timeout checking - fights end on NPC death or manual end
-}
-
-/**
- * Get current tick
- */
-public int getCurrentTick()
-{
-    return currentTick;
-}
-
-/**
- * Add damage dealt for a player
- */
-public void addDamageDealt(String playerName, int damage, String target)
-{
-    // Add to current fight only
-    if (currentFight != null && currentFight.isActive())
+    /**
+     * Reset overall tracking
+     */
+    public void resetOverallTracking()
     {
-        PlayerStats stats = currentFight.getOrCreatePlayerStats(playerName);
-        stats.addDamageDealt(damage, currentTick, target);
+        // Reset Overall fight
+        String localPlayerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Unknown";
+        overallFight = new Fight(currentTick);
+        overallFight.setBossName("Overall");
+        overallFight.setLocalPlayerName(localPlayerName);
+
+        clearHistory();
+        log.debug("Reset overall tracking");
+        updatePanel();
     }
 
-    // Overall is now calculated from fight history, not tracked separately
-}
-
-/**
- * Record an attack for tick loss calculation
- */
-public void recordAttack(String playerName, int weaponSpeed)
-{
-    // Add to current fight only
-    if (currentFight != null && currentFight.isActive())
+    /**
+     * Update current tick (called every game tick)
+     */
+    public void onGameTick()
     {
-        PlayerStats stats = currentFight.getOrCreatePlayerStats(playerName);
-        stats.recordAttack(weaponSpeed, currentTick);
-    }
+        currentTick++;
 
-    // Overall is now calculated from fight history, not tracked separately
-}
-
-/**
- * Check if there's an active fight
- */
-public boolean hasActiveFight()
-{
-    return (currentFight != null && currentFight.isActive());
-}
-
-/**
- * Add fight to history
- */
-private void addToHistory(Fight fight)
-{
-    fightHistory.add(0, fight); // Add to beginning
-
-    // Limit history size
-    int maxHistory = plugin.getConfig().maxSessionHistory();
-    while (fightHistory.size() > maxHistory)
-    {
-        fightHistory.remove(fightHistory.size() - 1);
-    }
-}
-
-/**
- * Clear fight history
- */
-public void clearHistory()
-{
-    fightHistory.clear();
-    log.debug("Cleared fight history");
-    updatePanel();
-}
-
-/**
- * Get fight history (immutable)
- */
-public List<Fight> getFightHistory()
-{
-    return Collections.unmodifiableList(fightHistory);
-}
-
-/**
- * Get Overall fight - aggregates all fights from history
- * This ensures Overall only includes active combat (no downtime between fights)
- */
-public Fight getOverallFight()
-{
-    // Create a synthetic Overall fight from history
-    Fight aggregated = new Fight(0);
-    aggregated.setBossName("Overall");
-
-    String localPlayerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Unknown";
-    aggregated.setLocalPlayerName(localPlayerName);
-
-    // Keep Overall "active" so it shows in the UI
-    // It will just show 0s until there's fight history
-
-    if (fightHistory.isEmpty())
-    {
-        // No history yet, return empty but active fight
-        return aggregated;
-    }
-
-    // Aggregate all completed fights
-    int totalActiveTicks = 0;
-
-    for (Fight fight : fightHistory)
-    {
-        totalActiveTicks += fight.getDurationTicks();
-
-        // Merge each player's stats from this fight
-        for (String playerName : fight.getPlayerStats().keySet())
+        if (currentFight != null && currentFight.isActive())
         {
-            PlayerStats fightStats = fight.getPlayerStats().get(playerName);
-            PlayerStats aggregatedStats = aggregated.getOrCreatePlayerStats(playerName);
+            currentFight.updateCurrentTick(currentTick);
 
-            // Merge the stats
-            aggregatedStats.setDamageDealt(aggregatedStats.getDamageDealt() + fightStats.getDamageDealt());
-            aggregatedStats.setTotalAttacks(aggregatedStats.getTotalAttacks() + fightStats.getTotalAttacks());
-            aggregatedStats.setSuccessfulHits(aggregatedStats.getSuccessfulHits() + fightStats.getSuccessfulHits());
-            aggregatedStats.setAttackingTicksLost(aggregatedStats.getAttackingTicksLost() + fightStats.getAttackingTicksLost());
+            // Mark Overall as in combat and update its ticks
+            if (overallFight != null && overallFight.isActive())
+            {
+                overallFight.setInCombat(true);
+                overallFight.updateCurrentTick(currentTick);
 
-            // Defensive stats
-            aggregatedStats.setAvoidableDamageTaken(aggregatedStats.getAvoidableDamageTaken() + fightStats.getAvoidableDamageTaken());
-            aggregatedStats.setPrayableDamageTaken(aggregatedStats.getPrayableDamageTaken() + fightStats.getPrayableDamageTaken());
-            aggregatedStats.setUnavoidableDamageTaken(aggregatedStats.getUnavoidableDamageTaken() + fightStats.getUnavoidableDamageTaken());
+                // Update Overall = base Overall + current fight (every tick for real-time)
+                syncOverallWithCurrent();
+            }
+        }
+        else
+        {
+            // No active fight - mark Overall as out of combat
+            if (overallFight != null && overallFight.isActive())
+            {
+                overallFight.setInCombat(false);
+                overallFight.updateCurrentTick(currentTick);
+            }
         }
     }
 
-    // Set the aggregated active combat ticks
-    aggregated.setActiveCombatTicks(totalActiveTicks);
-
-    return aggregated;
-}
-
-/**
- * Update UI panel
- */
-private void updatePanel()
-{
-    if (plugin.getPanel() != null)
+    /**
+     * Sync Overall stats to show base + current fight in real-time
+     * This creates the "Overall = Overall + CurrentFight" effect
+     */
+    private void syncOverallWithCurrent()
     {
-        plugin.getPanel().updatePanel();
+        if (currentFight == null || overallFight == null)
+        {
+            return;
+        }
+
+        // For each player in current fight, update Overall to show cumulative stats
+        for (String playerName : currentFight.getPlayerStats().keySet())
+        {
+            PlayerStats currentStats = currentFight.getPlayerStats().get(playerName);
+            PlayerStats overallStats = overallFight.getOrCreatePlayerStats(playerName);
+
+            // Calculate what Overall should show: base + current
+            overallStats.syncWithCurrentFight(currentStats, currentTick);
+        }
     }
-}
+
+    /**
+     * Lock current fight stats into Overall's base values
+     * Called when a fight ends
+     */
+    private void lockCurrentIntoOverall()
+    {
+        if (currentFight == null || overallFight == null)
+        {
+            return;
+        }
+
+        // Lock current fight stats into Overall's permanent base
+        for (String playerName : currentFight.getPlayerStats().keySet())
+        {
+            PlayerStats currentStats = currentFight.getPlayerStats().get(playerName);
+            PlayerStats overallStats = overallFight.getOrCreatePlayerStats(playerName);
+
+            // Permanently add current fight to Overall's base
+            overallStats.lockInFightStats(currentStats);
+        }
+
+        log.debug("Locked current fight into Overall base");
+    }
+
+    /**
+     * Add damage dealt for a player
+     */
+    public void addDamageDealt(String playerName, int damage, String target)
+    {
+        // Add to current fight only
+        if (currentFight != null && currentFight.isActive())
+        {
+            PlayerStats stats = currentFight.getOrCreatePlayerStats(playerName);
+            stats.addDamageDealt(damage, currentTick, target);
+        }
+
+        // Overall gets updated via syncOverallWithCurrent() every tick
+    }
+
+    /**
+     * Record an attack for tick loss calculation
+     */
+    public void recordAttack(String playerName, int weaponSpeed)
+    {
+        // Add to current fight only
+        if (currentFight != null && currentFight.isActive())
+        {
+            PlayerStats stats = currentFight.getOrCreatePlayerStats(playerName);
+            stats.recordAttack(weaponSpeed, currentTick);
+        }
+
+        // Overall gets updated via syncOverallWithCurrent() every tick
+    }
+
+    /**
+     * Check if there's an active fight
+     */
+    public boolean hasActiveFight()
+    {
+        return (currentFight != null && currentFight.isActive());
+    }
+
+    /**
+     * Add fight to history
+     */
+    private void addToHistory(Fight fight)
+    {
+        fightHistory.add(0, fight); // Add to beginning
+
+        // Limit history size
+        int maxHistory = plugin.getConfig().maxSessionHistory();
+        while (fightHistory.size() > maxHistory)
+        {
+            fightHistory.remove(fightHistory.size() - 1);
+        }
+
+        log.debug("Added fight to history. Total: {}", fightHistory.size());
+    }
+
+    /**
+     * Clear fight history
+     */
+    public void clearHistory()
+    {
+        fightHistory.clear();
+        log.debug("Cleared fight history");
+        updatePanel();
+    }
+
+    /**
+     * Get fight history (immutable)
+     */
+    public List<Fight> getFightHistory()
+    {
+        return Collections.unmodifiableList(fightHistory);
+    }
+
+    /**
+     * Update UI panel
+     */
+    private void updatePanel()
+    {
+        if (plugin.getPanel() != null)
+        {
+            plugin.getPanel().updatePanel();
+        }
+    }
 }

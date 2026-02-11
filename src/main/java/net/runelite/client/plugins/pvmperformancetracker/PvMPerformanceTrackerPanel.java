@@ -196,7 +196,8 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
 
         Fight currentFight = plugin.getFightTracker().getCurrentFight();
 
-        if (currentFight == null || !currentFight.isActive())
+        // Show current fight if it exists (even if inactive/ended)
+        if (currentFight == null)
         {
             addNoDataLabel(currentFightPanel);
             return;
@@ -217,14 +218,15 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
 
         Fight overallFight = plugin.getFightTracker().getOverallFight();
 
-        if (overallFight == null)
+        // Always show Overall (will show 0s if empty)
+        if (overallFight != null)
+        {
+            overallPanel.add(createCompactFightPanel(overallFight, false));
+        }
+        else
         {
             addNoDataLabel(overallPanel);
-            return;
         }
-
-        // Show Overall even if empty (will show 0s)
-        overallPanel.add(createCompactFightPanel(overallFight, false));
     }
 
     private void updateFightHistory()
@@ -302,10 +304,24 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
         PlayerStats localStats = fight.getLocalPlayerStats();
         if (localStats != null)
         {
-            int currentTick = plugin.getFightTracker() != null ? plugin.getFightTracker().getCurrentTick() : 0;
+            boolean isOverall = fight.getBossName() != null && fight.getBossName().equals("Overall");
+            int ticksLost;
+
+            if (isOverall)
+            {
+                // Overall mode: tick loss is already aggregated
+                ticksLost = localStats.getAttackingTicksLost();
+            }
+            else
+            {
+                // Current Fight: calculate real-time
+                int currentTick = plugin.getFightTracker() != null ? plugin.getFightTracker().getCurrentTick() : 0;
+                ticksLost = localStats.calculateTicksLost(currentTick, fight.isActive());
+            }
+
             panel.add(createCompactStatRow("DMG:", DF.format(localStats.getDamageDealt())));
             panel.add(createCompactStatRow("DPS:", DF_DECIMAL.format(localStats.calculateDPS(fight.getDurationTicks()))));
-            panel.add(createCompactStatRow("TL:", String.valueOf(localStats.calculateTicksLost(currentTick, fight.isActive()))));
+            panel.add(createCompactStatRow("TL:", String.valueOf(ticksLost)));
         }
         else
         {
@@ -439,10 +455,24 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
         nameLabel.setFont(new Font("Arial", Font.BOLD, 11));
         panel.add(nameLabel);
 
-        int currentTick = plugin.getFightTracker() != null ? plugin.getFightTracker().getCurrentTick() : 0;
+        boolean isOverall = fight.getBossName() != null && fight.getBossName().equals("Overall");
+        int ticksLost;
+
+        if (isOverall)
+        {
+            // Overall mode: tick loss already aggregated
+            ticksLost = stats.getAttackingTicksLost();
+        }
+        else
+        {
+            // Current Fight: calculate real-time
+            int currentTick = plugin.getFightTracker() != null ? plugin.getFightTracker().getCurrentTick() : 0;
+            ticksLost = stats.calculateTicksLost(currentTick, fight.isActive());
+        }
+
         panel.add(createCompactStatRow("DMG:", DF.format(stats.getDamageDealt())));
         panel.add(createCompactStatRow("DPS:", DF_DECIMAL.format(stats.calculateDPS(fight.getDurationTicks()))));
-        panel.add(createCompactStatRow("Ticks Lost:", String.valueOf(stats.calculateTicksLost(currentTick, fight.isActive()))));
+        panel.add(createCompactStatRow("Ticks Lost:", String.valueOf(ticksLost)));
         panel.add(createCompactStatRow("Accuracy:", DF_DECIMAL.format(stats.getAccuracyPercentage()) + "%"));
 
         return panel;
