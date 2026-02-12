@@ -159,8 +159,80 @@ public class AnimationListener
         // Record the attack
         fightTracker.recordAttack(playerName, weaponSpeed);
 
+        // Calculate expected damage for local player only (we have their equipment stats)
+        if (player.equals(client.getLocalPlayer()))
+        {
+            calculateAndRecordExpectedDamage(fightTracker, playerName, animationId);
+        }
+
         log.debug("{} attacked with animation {} (weapon speed: {} ticks)",
                 playerName, animationId, weaponSpeed);
+    }
+
+    /**
+     * Calculate and record expected damage for the attack
+     */
+    private void calculateAndRecordExpectedDamage(FightTracker fightTracker, String playerName, int animationId)
+    {
+        // Get NPC stats
+        if (plugin.getNpcStatsProvider() == null || !plugin.getNpcStatsProvider().isLoaded())
+        {
+            return; // NPC database not loaded yet
+        }
+
+        int bossNpcId = fightTracker.getCurrentFight().getBossNpcId();
+        var npcStats = plugin.getNpcStatsProvider().getNpcStats(bossNpcId);
+
+        if (npcStats == null)
+        {
+            return; // No stats available for this NPC
+        }
+
+        // Determine attack style from animation
+        String attackStyle = determineAttackStyle(animationId);
+
+        // Calculate expected damage
+        var combatFormulas = plugin.getCombatFormulas();
+        if (combatFormulas != null)
+        {
+            double expectedDamage = combatFormulas.calculateExpectedDamage(npcStats, attackStyle);
+
+            // Record it in player stats
+            var currentFight = fightTracker.getCurrentFight();
+            if (currentFight != null)
+            {
+                var playerStats = currentFight.getPlayerStats().get(playerName);
+                if (playerStats != null)
+                {
+                    playerStats.addExpectedDamage(expectedDamage);
+                    log.debug("Expected damage for {}: {} (style: {})", playerName, expectedDamage, attackStyle);
+                }
+            }
+        }
+    }
+
+    /**
+     * Determine attack style from animation ID
+     */
+    private String determineAttackStyle(int animationId)
+    {
+        // Magic animations
+        if (animationId == 1162 || animationId == 1167 || animationId == 1978 ||
+                animationId == 8532 || animationId == 7855 || animationId == 9493)
+        {
+            return "magic";
+        }
+
+        // Ranged animations
+        if (animationId == 426 || animationId == 5061 || animationId == 7617 ||
+                animationId == 7552 || animationId == 8291 || animationId == 929 ||
+                animationId == 7554 || animationId == 7555)
+        {
+            return "ranged";
+        }
+
+        // Default to melee (could be more specific with stab/slash/crush)
+        return "slash"; // Most common melee style
     }
 
     /**
