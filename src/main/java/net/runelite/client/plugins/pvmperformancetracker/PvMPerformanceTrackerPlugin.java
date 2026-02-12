@@ -15,6 +15,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.RuneLite;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.*;
 import net.runelite.client.plugins.pvmperformancetracker.listeners.*;
 import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
@@ -72,6 +73,12 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	@Getter
 	private PartyStatsManager partyStatsManager;
 
+	@Getter
+	private NpcStatsProvider npcStatsProvider;
+
+	@Getter
+	private CombatFormulas combatFormulas;
+
 	// Listeners
 	private HitsplatListener hitsplatListener;
 	private AnimationListener animationListener;
@@ -91,6 +98,19 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		weaponSpeedHelper = new WeaponSpeedHelper(client);
 		bossDetectionHelper = new BossDetectionHelper();
 		partyStatsManager = new PartyStatsManager(this, client, partyService);
+
+		// Initialize NPC stats provider (async to avoid blocking startup)
+		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR);
+		combatFormulas = new CombatFormulas(client);
+
+		// Load NPC database in background
+		new Thread(() -> {
+			try {
+				npcStatsProvider.initialize();
+			} catch (Exception e) {
+				log.error("Failed to initialize NPC stats provider", e);
+			}
+		}, "NPC-Stats-Loader").start();
 
 		// Initialize listeners
 		hitsplatListener = new HitsplatListener(this);

@@ -229,11 +229,17 @@ public interface PvMPerformanceTrackerConfig extends Config
 	enum OverlayMetric
 	{
 		DPS("DPS"),
+		DAMAGE("Total Damage"),
 		TICKS_LOST("Ticks Lost"),
+		EXPECTED_DPS("Expected DPS"),
+		EXPECTED_DAMAGE("Expected Damage"),
+		ACCURACY("Accuracy %"),
 		DAMAGE_TAKEN("Damage Taken"),
 		AVOIDABLE_DAMAGE("Avoidable Damage"),
 		PRAYABLE_DAMAGE("Prayable Damage"),
-		UNAVOIDABLE_DAMAGE("Unavoidable Damage");
+		UNAVOIDABLE_DAMAGE("Unavoidable Damage"),
+		CHANCES_OF_DEATH("Death Chances"),
+		DEATH_CHANCE_PERCENT("Death Chance %");
 
 		private final String displayName;
 

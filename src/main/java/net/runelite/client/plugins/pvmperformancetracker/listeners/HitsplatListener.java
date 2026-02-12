@@ -4,8 +4,12 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.HitsplatApplied;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
+import net.runelite.client.plugins.pvmperformancetracker.enums.DamageType;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.CombatFormulas;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
 import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
+import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
+import net.runelite.client.plugins.pvmperformancetracker.models.PlayerStats;
 import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
 
 @Slf4j
@@ -136,7 +140,156 @@ public class HitsplatListener
      */
     private void handleDamageToPlayer(Hitsplat hitsplat)
     {
-        // TODO: Implement defensive tracking
+        FightTracker fightTracker = plugin.getFightTracker();
+        if (fightTracker == null || !fightTracker.hasActiveFight())
+        {
+            return; // No active fight to track
+        }
+
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
+        {
+            return;
+        }
+
+        Fight currentFight = fightTracker.getCurrentFight();
+        if (currentFight == null || !currentFight.isActive())
+        {
+            return;
+        }
+
+        int damage = hitsplat.getAmount();
+        int currentTick = fightTracker.getCurrentTick();
+
+        // Get local player stats
+        PlayerStats playerStats = currentFight.getLocalPlayerStats();
+        if (playerStats == null)
+        {
+            return;
+        }
+
+        // Get current HP (before hit)
+        int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+
+        // Calculate death probability BEFORE this hit
+        double deathProbability = calculateDeathProbability(currentHp, currentFight, damage);
+        if (deathProbability > 0.0)
+        {
+            playerStats.addDeathChance(deathProbability);
+            log.debug("Death probability: {}% at {} HP", deathProbability * 100, currentHp);
+        }
+
+        // Classify the damage type
+        DamageType damageType = classifyDamage(currentFight, hitsplat);
+
+        // Record the damage
+        playerStats.addDamageTaken(damage, damageType, currentTick);
+
+        log.debug("Player took {} {} damage (HP: {} -> {})",
+                damage, damageType, currentHp, currentHp - damage);
+    }
+
+    /**
+     * Calculate probability of death from this hit
+     */
+    private double calculateDeathProbability(int currentHp, Fight fight, int damageAmount)
+    {
+        if (currentHp <= 0 || damageAmount == 0)
+        {
+            return 0.0;
+        }
+
+        // Get NPC stats
+        NpcCombatStats npcStats = null;
+        if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
+        {
+            npcStats = plugin.getNpcStatsProvider().getNpcStats(fight.getBossNpcId());
+        }
+
+        if (npcStats == null)
+        {
+            // Fallback: simple calculation based on damage dealt
+            // If damage >= current HP, there was death risk
+            if (damageAmount >= currentHp)
+            {
+                // Rough estimate: assume 50% hit chance, uniform damage distribution
+                return 0.5 * (damageAmount - currentHp + 1.0) / (damageAmount + 1.0);
+            }
+            return 0.0;
+        }
+
+        // Check if prayer is active
+        boolean isPrayerActive = isPrayerActive(npcStats);
+
+        // Use combat formulas to calculate death probability
+        CombatFormulas formulas = plugin.getCombatFormulas();
+        if (formulas != null)
+        {
+            return formulas.calculateDeathProbability(currentHp, npcStats, isPrayerActive);
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Check if player has appropriate protection prayer active
+     */
+    private boolean isPrayerActive(NpcCombatStats npcStats)
+    {
+        String attackType = npcStats.getPrimaryAttackType();
+        if (attackType == null)
+        {
+            return false;
+        }
+
+        // Check if relevant protection prayer is active
+        switch (attackType.toLowerCase())
+        {
+            case "melee":
+                return client.isPrayerActive(Prayer.PROTECT_FROM_MELEE);
+            case "ranged":
+                return client.isPrayerActive(Prayer.PROTECT_FROM_MISSILES);
+            case "magic":
+                return client.isPrayerActive(Prayer.PROTECT_FROM_MAGIC);
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Classify damage as Avoidable, Prayable, or Unavoidable
+     */
+    private DamageType classifyDamage(Fight fight, Hitsplat hitsplat)
+    {
+        // Get NPC stats
+        NpcCombatStats npcStats = null;
+        if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
+        {
+            npcStats = plugin.getNpcStatsProvider().getNpcStats(fight.getBossNpcId());
+        }
+
+        if (npcStats == null)
+        {
+            return DamageType.UNKNOWN;
+        }
+
+        // Check if appropriate prayer was active
+        boolean hadCorrectPrayer = isPrayerActive(npcStats);
+
+        // If prayer was active and still took damage, it's UNAVOIDABLE
+        if (hadCorrectPrayer && hitsplat.getAmount() > 0)
+        {
+            return DamageType.UNAVOIDABLE;
+        }
+
+        // If prayer wasn't active but should have been, it's PRAYABLE
+        if (!hadCorrectPrayer)
+        {
+            return DamageType.PRAYABLE;
+        }
+
+        // Otherwise it's AVOIDABLE (could have been dodged by positioning/movement)
+        return DamageType.AVOIDABLE;
     }
 
     /**

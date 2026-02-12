@@ -19,6 +19,10 @@ public class PlayerStats
     private int totalAttacks;
     private int successfulHits;
 
+    // Expected Damage Metrics (calculated from combat formulas)
+    private double expectedDamageDealt;
+    private int expectedDamageCalculations; // Count for averaging
+
     // Attacking Ticks Tracking
     private int totalCombatTicks;  // Ticks from first hitsplat to death
     private int totalAttackingTicks; // Sum of (attacks * weapon speed)
@@ -31,11 +35,18 @@ public class PlayerStats
     private int baseTotalAttacks;
     private int baseSuccessfulHits;
     private int baseAttackingTicksLost;
+    private double baseExpectedDamageDealt;
+    private int baseExpectedDamageCalculations;
 
     // Defensive Metrics
+    private int damageTaken; // Total damage taken
     private int avoidableDamageTaken;
     private int prayableDamageTaken;
     private int unavoidableDamageTaken;
+
+    // Death Chance Tracking
+    private int chancesOfDeath; // Count of hits with death probability > 0%
+    private double cumulativeDeathChance; // Compounding probability of death
 
     // Detailed damage entries for analysis
     private final List<DamageInstance> damageDealtInstances = new ArrayList<>();
@@ -52,6 +63,8 @@ public class PlayerStats
         this.damageDealt = 0;
         this.totalAttacks = 0;
         this.successfulHits = 0;
+        this.expectedDamageDealt = 0.0;
+        this.expectedDamageCalculations = 0;
         this.totalCombatTicks = 0;
         this.totalAttackingTicks = 0;
         this.attackingTicksLost = 0;
@@ -59,9 +72,14 @@ public class PlayerStats
         this.baseTotalAttacks = 0;
         this.baseSuccessfulHits = 0;
         this.baseAttackingTicksLost = 0;
+        this.baseExpectedDamageDealt = 0.0;
+        this.baseExpectedDamageCalculations = 0;
+        this.damageTaken = 0;
         this.avoidableDamageTaken = 0;
         this.prayableDamageTaken = 0;
         this.unavoidableDamageTaken = 0;
+        this.chancesOfDeath = 0;
+        this.cumulativeDeathChance = 0.0;
         this.isLocalPlayer = false;
         this.currentWeaponSpeed = 4; // Default
     }
@@ -277,9 +295,17 @@ public class PlayerStats
         this.totalCombatTicks += other.totalCombatTicks;
         this.totalAttackingTicks += other.totalAttackingTicks;
         this.attackingTicksLost += other.attackingTicksLost;
+        this.expectedDamageDealt += other.expectedDamageDealt;
+        this.expectedDamageCalculations += other.expectedDamageCalculations;
+        this.damageTaken += other.damageTaken;
         this.avoidableDamageTaken += other.avoidableDamageTaken;
         this.prayableDamageTaken += other.prayableDamageTaken;
         this.unavoidableDamageTaken += other.unavoidableDamageTaken;
+        this.chancesOfDeath += other.chancesOfDeath;
+
+        // Merge cumulative death chance probabilities
+        double survivalProb = (1.0 - this.cumulativeDeathChance) * (1.0 - other.cumulativeDeathChance);
+        this.cumulativeDeathChance = 1.0 - survivalProb;
 
         this.damageDealtInstances.addAll(other.damageDealtInstances);
         this.damageTakenInstances.addAll(other.damageTakenInstances);
@@ -295,6 +321,8 @@ public class PlayerStats
         this.damageDealt = baseDamageDealt + currentStats.getDamageDealt();
         this.totalAttacks = baseTotalAttacks + currentStats.getTotalAttacks();
         this.successfulHits = baseSuccessfulHits + currentStats.getSuccessfulHits();
+        this.expectedDamageDealt = baseExpectedDamageDealt + currentStats.getExpectedDamageDealt();
+        this.expectedDamageCalculations = baseExpectedDamageCalculations + currentStats.getExpectedDamageCalculations();
 
         // Tick loss: base (finalized) + current (real-time)
         int currentTickLoss = currentStats.calculateTicksLost(currentTick, true);
@@ -304,10 +332,13 @@ public class PlayerStats
         this.lastAttackTick = currentStats.getLastAttackTick();
         this.currentWeaponSpeed = currentStats.getCurrentWeaponSpeed();
 
-        // Defensive stats - just current fight for now
+        // Defensive stats - sync with current fight
+        this.damageTaken = currentStats.getDamageTaken();
         this.avoidableDamageTaken = currentStats.getAvoidableDamageTaken();
         this.prayableDamageTaken = currentStats.getPrayableDamageTaken();
         this.unavoidableDamageTaken = currentStats.getUnavoidableDamageTaken();
+        this.chancesOfDeath = currentStats.getChancesOfDeath();
+        this.cumulativeDeathChance = currentStats.getCumulativeDeathChance();
     }
 
     /**
@@ -321,15 +352,103 @@ public class PlayerStats
         baseTotalAttacks += currentStats.getTotalAttacks();
         baseSuccessfulHits += currentStats.getSuccessfulHits();
         baseAttackingTicksLost += currentStats.getAttackingTicksLost();
+        baseExpectedDamageDealt += currentStats.getExpectedDamageDealt();
+        baseExpectedDamageCalculations += currentStats.getExpectedDamageCalculations();
 
         // Update displayed values to match base (no current fight now)
         this.damageDealt = baseDamageDealt;
         this.totalAttacks = baseTotalAttacks;
         this.successfulHits = baseSuccessfulHits;
         this.attackingTicksLost = baseAttackingTicksLost;
+        this.expectedDamageDealt = baseExpectedDamageDealt;
+        this.expectedDamageCalculations = baseExpectedDamageCalculations;
 
         // Reset weapon state since no current fight
         this.lastAttackTick = null;
+    }
+
+    /**
+     * Add expected damage (calculated from combat formulas)
+     */
+    public void addExpectedDamage(double expectedDamage)
+    {
+        this.expectedDamageDealt += expectedDamage;
+        this.expectedDamageCalculations++;
+    }
+
+    /**
+     * Get average expected damage per attack
+     */
+    public double getAverageExpectedDamage()
+    {
+        if (expectedDamageCalculations == 0)
+        {
+            return 0.0;
+        }
+        return expectedDamageDealt / expectedDamageCalculations;
+    }
+
+    /**
+     * Calculate expected DPS
+     */
+    public double getExpectedDps(int fightDurationTicks)
+    {
+        if (fightDurationTicks == 0)
+        {
+            return 0.0;
+        }
+        double seconds = fightDurationTicks * 0.6; // 0.6 seconds per tick
+        return expectedDamageDealt / seconds;
+    }
+
+    /**
+     * Add damage taken with classification
+     */
+    public void addDamageTaken(int damage, DamageType damageType, int tick)
+    {
+        this.damageTaken += damage;
+
+        switch (damageType)
+        {
+            case AVOIDABLE:
+                this.avoidableDamageTaken += damage;
+                break;
+            case PRAYABLE:
+                this.prayableDamageTaken += damage;
+                break;
+            case UNAVOIDABLE:
+                this.unavoidableDamageTaken += damage;
+                break;
+        }
+
+        DamageInstance instance = new DamageInstance(tick, damage, "Self");
+        instance.setDamageType(damageType);
+        damageTakenInstances.add(instance);
+    }
+
+    /**
+     * Add a chance of death from a hit
+     * Updates both the count and cumulative probability
+     */
+    public void addDeathChance(double deathProbability)
+    {
+        if (deathProbability > 0.0)
+        {
+            this.chancesOfDeath++;
+
+            // Calculate cumulative probability: 1 - (1 - current) * (1 - new)
+            double survivalProbability = 1.0 - this.cumulativeDeathChance;
+            double newSurvivalProbability = survivalProbability * (1.0 - deathProbability);
+            this.cumulativeDeathChance = 1.0 - newSurvivalProbability;
+        }
+    }
+
+    /**
+     * Get cumulative death chance as a percentage
+     */
+    public double getDeathChancePercentage()
+    {
+        return cumulativeDeathChance * 100.0;
     }
 
     /**

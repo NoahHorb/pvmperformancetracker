@@ -270,13 +270,28 @@ public class PvMPerformanceTrackerOverlay extends Overlay
                 double dps = stats.calculateDPS(fight.getDurationTicks());
                 return DF_DECIMAL.format(dps) + " DPS";
 
+            case DAMAGE:
+                return DF.format(stats.getDamageDealt()) + " DMG";
+
             case TICKS_LOST:
-                // Calculate ticks lost in real-time
                 int ticksLost = calculateTicksLost(stats, fight);
                 return "-" + ticksLost + "T";
 
+            case EXPECTED_DPS:
+                double expDps = stats.getExpectedDps(fight.getDurationTicks());
+                return DF_DECIMAL.format(expDps) + " EDPS";
+
+            case EXPECTED_DAMAGE:
+                return DF.format((int)stats.getExpectedDamageDealt()) + " ED";
+
+            case ACCURACY:
+                int totalAtks = stats.getTotalAttacks();
+                int hits = stats.getSuccessfulHits();
+                double accuracy = totalAtks > 0 ? (hits * 100.0 / totalAtks) : 0.0;
+                return DF_DECIMAL.format(accuracy) + "%";
+
             case DAMAGE_TAKEN:
-                return DF.format(stats.getTotalDamageTaken()) + " DMG";
+                return DF.format(stats.getDamageTaken()) + " DT";
 
             case AVOIDABLE_DAMAGE:
                 return DF.format(stats.getAvoidableDamageTaken()) + " AD";
@@ -286,6 +301,12 @@ public class PvMPerformanceTrackerOverlay extends Overlay
 
             case UNAVOIDABLE_DAMAGE:
                 return DF.format(stats.getUnavoidableDamageTaken()) + " UD";
+
+            case CHANCES_OF_DEATH:
+                return stats.getChancesOfDeath() + " DC";
+
+            case DEATH_CHANCE_PERCENT:
+                return DF_DECIMAL.format(stats.getDeathChancePercentage()) + "%";
 
             default:
                 return "0";
@@ -300,15 +321,43 @@ public class PvMPerformanceTrackerOverlay extends Overlay
                 double dps = stats.calculateDPS(fight.getDurationTicks());
                 return DF_COMPACT.format(dps);
 
+            case DAMAGE:
+                return DF_COMPACT.format(stats.getDamageDealt());
+
             case TICKS_LOST:
                 int ticksLost = calculateTicksLost(stats, fight);
                 return "-" + ticksLost;
 
+            case EXPECTED_DPS:
+                double expDps = stats.getExpectedDps(fight.getDurationTicks());
+                return DF_COMPACT.format(expDps);
+
+            case EXPECTED_DAMAGE:
+                return DF_COMPACT.format((int)stats.getExpectedDamageDealt());
+
+            case ACCURACY:
+                int totalAtks = stats.getTotalAttacks();
+                int hits = stats.getSuccessfulHits();
+                double accuracy = totalAtks > 0 ? (hits * 100.0 / totalAtks) : 0.0;
+                return DF_COMPACT.format(accuracy);
+
             case DAMAGE_TAKEN:
+                return DF_COMPACT.format(stats.getDamageTaken());
+
             case AVOIDABLE_DAMAGE:
+                return DF_COMPACT.format(stats.getAvoidableDamageTaken());
+
             case PRAYABLE_DAMAGE:
+                return DF_COMPACT.format(stats.getPrayableDamageTaken());
+
             case UNAVOIDABLE_DAMAGE:
-                return DF_COMPACT.format(getMetricValue(metric, stats));
+                return DF_COMPACT.format(stats.getUnavoidableDamageTaken());
+
+            case CHANCES_OF_DEATH:
+                return String.valueOf(stats.getChancesOfDeath());
+
+            case DEATH_CHANCE_PERCENT:
+                return DF_COMPACT.format(stats.getDeathChancePercentage());
 
             default:
                 return "0";
@@ -340,14 +389,20 @@ public class PvMPerformanceTrackerOverlay extends Overlay
     {
         switch (metric)
         {
+            case DAMAGE:
+                return stats.getDamageDealt();
+            case EXPECTED_DAMAGE:
+                return (int)stats.getExpectedDamageDealt();
             case DAMAGE_TAKEN:
-                return stats.getTotalDamageTaken();
+                return stats.getDamageTaken();
             case AVOIDABLE_DAMAGE:
                 return stats.getAvoidableDamageTaken();
             case PRAYABLE_DAMAGE:
                 return stats.getPrayableDamageTaken();
             case UNAVOIDABLE_DAMAGE:
                 return stats.getUnavoidableDamageTaken();
+            case CHANCES_OF_DEATH:
+                return stats.getChancesOfDeath();
             default:
                 return 0;
         }
