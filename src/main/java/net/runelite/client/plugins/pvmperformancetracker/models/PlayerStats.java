@@ -159,7 +159,8 @@ public class PlayerStats
         int ticksSinceLastAttack = currentTick - lastAttackTick;
 
         // If we attacked after cooldown, add the extra ticks to accumulated ticks lost
-        if (ticksSinceLastAttack > currentWeaponSpeed)
+        // Changed from > to >= so tick loss counts immediately after weapon speed
+        if (ticksSinceLastAttack >= currentWeaponSpeed)
         {
             int ticksOverCooldown = ticksSinceLastAttack - currentWeaponSpeed;
             attackingTicksLost += ticksOverCooldown;
@@ -191,7 +192,8 @@ public class PlayerStats
         int ticksSinceLastAttack = currentTick - lastAttackTick;
 
         // If we're still within weapon speed cooldown, no new ticks lost
-        if (ticksSinceLastAttack <= currentWeaponSpeed)
+        // Changed from <= to < so it increments immediately after weapon speed
+        if (ticksSinceLastAttack < currentWeaponSpeed)
         {
             return attackingTicksLost; // Return accumulated ticks lost
         }
@@ -255,7 +257,8 @@ public class PlayerStats
             int fightEndTick = firstDamageTick + fightDurationTicks;
             int ticksSinceLastAttack = fightEndTick - lastAttackTick;
 
-            if (ticksSinceLastAttack > currentWeaponSpeed)
+            // Changed from > to >= so tick loss counts immediately after weapon speed
+            if (ticksSinceLastAttack >= currentWeaponSpeed)
             {
                 int ticksOverCooldown = ticksSinceLastAttack - currentWeaponSpeed;
                 attackingTicksLost += ticksOverCooldown;

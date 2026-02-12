@@ -27,7 +27,7 @@ public class FightTracker
     @Getter
     private Fight overallFight;
 
-    @Getter
+    //@Getter
     private final List<Fight> fightHistory = new ArrayList<>();
 
     @Getter

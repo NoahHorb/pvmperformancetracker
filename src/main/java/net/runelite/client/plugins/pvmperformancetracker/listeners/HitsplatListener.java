@@ -14,6 +14,9 @@ public class HitsplatListener
     private final PvMPerformanceTrackerPlugin plugin;
     private final Client client;
 
+    // Track the last NPC the local player attacked (for hitsplat attribution)
+    private NPC lastAttackedNPC;
+
     public HitsplatListener(PvMPerformanceTrackerPlugin plugin)
     {
         this.plugin = plugin;
@@ -51,12 +54,14 @@ public class HitsplatListener
         // Check if we should track this NPC
         if (!shouldTrackNPC(npc))
         {
+            log.debug("Skipping NPC: not tracked");
             return;
         }
 
         // Only track player damage hitsplats
         if (!isPlayerDamageHitsplat(hitsplat))
         {
+            log.debug("Skipping hitsplat: not player damage type");
             return;
         }
 
@@ -69,8 +74,11 @@ public class HitsplatListener
 
         if (playerName == null)
         {
+            log.debug("Skipping hitsplat to {}: could not determine source (not party member or local player)", targetName);
             return; // Not from party member or local player
         }
+
+        log.debug("Processing hitsplat: {} damage to {} from {}", damage, targetName, playerName);
 
         FightTracker fightTracker = plugin.getFightTracker();
         if (fightTracker == null)
@@ -80,6 +88,12 @@ public class HitsplatListener
 
         // START FIGHT ON FIRST HITSPLAT
         Fight currentFight = fightTracker.getCurrentFight();
+
+        log.debug("Hitsplat check: currentFight={}, active={}, targetId={}, currentId={}",
+                currentFight != null ? currentFight.getBossName() : "null",
+                currentFight != null ? currentFight.isActive() : false,
+                targetId,
+                currentFight != null ? currentFight.getBossNpcId() : -1);
 
         if (currentFight == null || !currentFight.isActive())
         {
@@ -91,17 +105,10 @@ public class HitsplatListener
         else if (currentFight.getBossNpcId() != targetId)
         {
             // Different target than current fight
-            boolean currentIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
-            boolean newTargetIsBoss = plugin.getBossDetectionHelper().isBoss(npc);
-
-            if (newTargetIsBoss && !currentIsBoss)
-            {
-                // Switch to boss target
-                log.debug("Switching fight from {} to boss {}", currentFight.getBossName(), targetName);
-                fightTracker.endCurrentFight();
-                fightTracker.startNewFight(targetName, targetId);
-                currentFight = fightTracker.getCurrentFight();
-            }
+            log.debug("Different NPC - current: {}, new: {}", currentFight.getBossNpcId(), targetId);
+            fightTracker.endCurrentFight();
+            fightTracker.startNewFight(targetName, targetId);
+            currentFight = fightTracker.getCurrentFight();
         }
 
         // Record the damage (even if 0)
@@ -117,6 +124,10 @@ public class HitsplatListener
 
             log.debug("{} dealt {} damage to {} (fight: {})",
                     playerName, damage, targetName, currentFight.getBossName());
+        }
+        else
+        {
+            log.debug("NOT recording damage - fight is null or inactive");
         }
     }
 
@@ -139,6 +150,13 @@ public class HitsplatListener
         // Check if local player is attacking this NPC
         if (localPlayer != null && localPlayer.getInteracting() == target)
         {
+            lastAttackedNPC = target; // Track for fallback
+            return localPlayer.getName();
+        }
+
+        // Fallback: if local player recently attacked this NPC (getInteracting can be null between attacks)
+        if (localPlayer != null && target == lastAttackedNPC)
+        {
             return localPlayer.getName();
         }
 
@@ -156,8 +174,7 @@ public class HitsplatListener
             }
         }
 
-        // NO FALLBACK - if we can't confirm it's local player or party member, return null
-        // This prevents tracking random nearby players
+        // NO FALLBACK to random players - if we can't confirm it's local player or party member, return null
         return null;
     }
 
