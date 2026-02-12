@@ -2,8 +2,9 @@ package net.runelite.client.plugins.pvmperformancetracker.helpers;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
-
+import net.runelite.client.game.ItemStats;
 /**
  * OSRS combat formula calculations
  * Based on OSRS Wiki formulas
@@ -12,10 +13,12 @@ import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
 public class CombatFormulas
 {
     private final Client client;
+    private final ItemManager itemManager;
 
-    public CombatFormulas(Client client)
+    public CombatFormulas(Client client, ItemManager itemManager)
     {
         this.client = client;
+        this.itemManager = itemManager;
     }
 
     /**
@@ -76,18 +79,17 @@ public class CombatFormulas
     private int calculateMeleeMaxHit()
     {
         int strengthLevel = client.getBoostedSkillLevel(Skill.STRENGTH);
-        int strengthBonus = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "melee_strength");
+        int strengthBonus = getPlayerStrengthBonus();
 
         // Prayer multipliers
-        double prayerMultiplier = getPrayerStrengthMultiplier();
+        double prayerMultiplier = getStrengthPrayerMultiplier();
 
-        // Void knight multiplier (simplified - would need to check actual equipment)
-        double voidMultiplier = 1.0;
+        // Void multiplier
+        double voidMultiplier = hasVoidMelee() ? 1.10 : 1.0;
 
-        double effectiveStrength = Math.floor((strengthLevel * prayerMultiplier * voidMultiplier) + 8 + 3); // +3 for aggressive
-        double baseDamage = (effectiveStrength * (strengthBonus + 64)) / 640.0;
+        double effectiveStrength = Math.floor(strengthLevel * prayerMultiplier * voidMultiplier) + 8 + 3; // +3 for aggressive stance
 
-        return (int) Math.floor(0.5 + baseDamage);
+        return (int) Math.floor(0.5 + effectiveStrength * (strengthBonus + 64) / 640.0);
     }
 
     /**
@@ -96,15 +98,17 @@ public class CombatFormulas
     private int calculateRangedMaxHit()
     {
         int rangedLevel = client.getBoostedSkillLevel(Skill.RANGED);
-        int rangedStrength = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "ranged_strength");
+        int rangedStrength = getPlayerRangedStrength();
 
-        double prayerMultiplier = getPrayerRangedStrengthMultiplier();
-        double voidMultiplier = 1.0;
+        // Prayer multipliers
+        double prayerMultiplier = getRangedPrayerMultiplier();
 
-        double effectiveRanged = Math.floor((rangedLevel * prayerMultiplier * voidMultiplier) + 8 + 3);
-        double baseDamage = (effectiveRanged * (rangedStrength + 64)) / 640.0;
+        // Void multiplier
+        double voidMultiplier = hasVoidRanged() ? 1.10 : 1.0;
 
-        return (int) Math.floor(0.5 + baseDamage);
+        double effectiveRanged = Math.floor(rangedLevel * prayerMultiplier * voidMultiplier) + 8 + 3;
+
+        return (int) Math.floor(0.5 + effectiveRanged * (rangedStrength + 64) / 640.0);
     }
 
     /**
@@ -112,40 +116,42 @@ public class CombatFormulas
      */
     private int calculateMagicMaxHit()
     {
-        // Magic max hit depends on spell being used
-        // For powered staves, use equipment bonus
-        // For spells, use spell base damage + magic damage bonus
+        int magicLevel = client.getBoostedSkillLevel(Skill.MAGIC);
+        int magicDamageBonus = getPlayerMagicDamage();
 
-        int magicDamageBonus = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "magic_damage");
+        // Prayer multipliers
+        double prayerMultiplier = getMagicPrayerMultiplier();
 
-        // This is simplified - would need spell detection
-        // Assume powered staff for now
-        int baseMax = 28; // Example: Trident base max
+        // Base magic damage (depends on spell - using average)
+        int baseSpellDamage = 20; // Placeholder - could detect actual spell
 
-        return (int) (baseMax * (1 + magicDamageBonus / 100.0));
+        double effectiveMagic = Math.floor(magicLevel * prayerMultiplier);
+
+        // Magic damage formula: Base Spell Damage * (1 + Magic Damage Bonus / 100)
+        return (int) (baseSpellDamage * (1.0 + magicDamageBonus / 100.0));
     }
 
     /**
-     * Calculate hit chance (accuracy)
+     * Calculate player accuracy against NPC
      */
     public double calculateAccuracy(NpcCombatStats npcStats, String attackStyle)
     {
         if (npcStats == null)
         {
-            return 0.5; // Default 50%
+            return 0.5;
         }
 
-        int attackRoll = calculatePlayerAttackRoll(attackStyle);
-        int defenceRoll = calculateNpcDefenceRoll(npcStats, attackStyle);
+        int playerAttackRoll = calculatePlayerAttackRoll(attackStyle);
+        int npcDefenceRoll = calculateNpcDefenceRoll(npcStats, attackStyle);
 
         // Standard accuracy formula
-        if (attackRoll > defenceRoll)
+        if (playerAttackRoll > npcDefenceRoll)
         {
-            return 1.0 - (defenceRoll + 2.0) / (2.0 * (attackRoll + 1.0));
+            return 1.0 - (npcDefenceRoll + 2.0) / (2.0 * (playerAttackRoll + 1.0));
         }
         else
         {
-            return attackRoll / (2.0 * (defenceRoll + 1.0));
+            return playerAttackRoll / (2.0 * (npcDefenceRoll + 1.0));
         }
     }
 
@@ -154,28 +160,38 @@ public class CombatFormulas
      */
     private int calculatePlayerAttackRoll(String attackStyle)
     {
-        int attackLevel;
-        int attackBonus;
+        int attackBonus = 0;
+        int attackLevel = 0;
+        double prayerMultiplier = 1.0;
+        double voidMultiplier = 1.0;
+
+        if (attackStyle == null)
+        {
+            attackStyle = "melee";
+        }
 
         switch (attackStyle.toLowerCase())
         {
             case "magic":
                 attackLevel = client.getBoostedSkillLevel(Skill.MAGIC);
-                attackBonus = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "magic_attack");
+                attackBonus = getPlayerMagicAttack();
+                prayerMultiplier = getMagicPrayerMultiplier();
                 break;
             case "ranged":
                 attackLevel = client.getBoostedSkillLevel(Skill.RANGED);
-                attackBonus = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "ranged_attack");
+                attackBonus = getPlayerRangedAttack();
+                prayerMultiplier = getRangedPrayerMultiplier();
+                voidMultiplier = hasVoidRanged() ? 1.10 : 1.0;
                 break;
             default: // melee
                 attackLevel = client.getBoostedSkillLevel(Skill.ATTACK);
-                attackBonus = getEquipmentBonus(EquipmentInventorySlot.WEAPON, "attack_" + attackStyle);
+                attackBonus = getPlayerMeleeAttack(attackStyle);
+                prayerMultiplier = getAttackPrayerMultiplier();
+                voidMultiplier = hasVoidMelee() ? 1.10 : 1.0;
                 break;
         }
 
-        double prayerMultiplier = getPrayerAttackMultiplier(attackStyle);
-        double effectiveLevel = Math.floor((attackLevel * prayerMultiplier) + 8 + 3); // +3 for accurate
-
+        double effectiveLevel = Math.floor(attackLevel * prayerMultiplier * voidMultiplier) + 8 + 3;
         return (int) (effectiveLevel * (attackBonus + 64));
     }
 
@@ -184,56 +200,421 @@ public class CombatFormulas
      */
     private int calculateNpcDefenceRoll(NpcCombatStats npcStats, String attackStyle)
     {
-        int defenceLevel = npcStats.getDefenceLevel() != null ? npcStats.getDefenceLevel() : 1;
+        int defenceLevel = npcStats.getDefenceLevelOrDefault();
         int defenceBonus = npcStats.getDefenceBonus(attackStyle);
 
         int effectiveDefence = defenceLevel + 9;
-
         return effectiveDefence * (defenceBonus + 64);
     }
 
     /**
-     * Get equipment bonus (simplified - would need actual equipment inspection)
+     * Get player's strength bonus from equipment
      */
-    private int getEquipmentBonus(EquipmentInventorySlot slot, String bonusType)
+    private int getPlayerStrengthBonus()
     {
-        // This is a placeholder - would need to inspect actual equipment
-        // For now, return estimated values based on common gear
-        return 80; // Example value
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    totalBonus += itemStats.getEquipment().getStr();
+                }
+            }
+        }
+        return totalBonus;
     }
 
     /**
-     * Get prayer strength multiplier
+     * Get player's ranged strength from equipment
      */
-    private double getPrayerStrengthMultiplier()
+    private int getPlayerRangedStrength()
     {
-        // Check active prayers
-        // Burst of Strength: 1.05
-        // Superhuman Strength: 1.10
-        // Ultimate Strength: 1.15
-        // Chivalry: 1.18
-        // Piety: 1.23
-        return 1.0; // Default: no prayer
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    totalBonus += itemStats.getEquipment().getRstr();
+                }
+            }
+        }
+        return totalBonus;
     }
 
     /**
-     * Get prayer ranged strength multiplier
+     * Get player's magic damage bonus from equipment
      */
-    private double getPrayerRangedStrengthMultiplier()
+    private int getPlayerMagicDamage()
     {
-        // Sharp Eye / Hawk Eye: 1.05 / 1.10
-        // Eagle Eye: 1.15
-        // Rigour: 1.23
-        return 1.0; // Default: no prayer
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    totalBonus += itemStats.getEquipment().getMdmg();
+                }
+            }
+        }
+        return totalBonus;
     }
 
     /**
-     * Get prayer attack multiplier
+     * Get player's melee attack bonus
      */
-    private double getPrayerAttackMultiplier(String attackStyle)
+    private int getPlayerMeleeAttack(String style)
     {
-        // Similar to strength multipliers
-        return 1.0; // Default: no prayer
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    // Get appropriate attack bonus based on style
+                    switch (style.toLowerCase())
+                    {
+                        case "stab":
+                            totalBonus += itemStats.getEquipment().getAstab();
+                            break;
+                        case "slash":
+                            totalBonus += itemStats.getEquipment().getAslash();
+                            break;
+                        case "crush":
+                            totalBonus += itemStats.getEquipment().getAcrush();
+                            break;
+                        default:
+                            totalBonus += itemStats.getEquipment().getAslash(); // Default slash
+                            break;
+                    }
+                }
+            }
+        }
+        return totalBonus;
+    }
+
+    /**
+     * Get player's ranged attack bonus
+     */
+    private int getPlayerRangedAttack()
+    {
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    totalBonus += itemStats.getEquipment().getArange();
+                }
+            }
+        }
+        return totalBonus;
+    }
+
+    /**
+     * Get player's magic attack bonus
+     */
+    private int getPlayerMagicAttack()
+    {
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                net.runelite.client.game.ItemStats itemStats = itemManager.getItemStats(item.getId());
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    totalBonus += itemStats.getEquipment().getAmagic();
+                }
+            }
+        }
+        return totalBonus;
+    }
+
+    /**
+     * Get player's defence bonus against attack type
+     */
+    private int getPlayerDefenceBonus(String attackType)
+    {
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return 0;
+        }
+
+        int totalBonus = 0;
+        for (Item item : equipment.getItems())
+        {
+            if (item.getId() > 0)
+            {
+                net.runelite.client.game.ItemStats itemStats = itemManager.getItemStats(item.getId());
+                //ItemStats itemStats = itemManager.getItemStats(item.getId(), );
+                if (itemStats != null && itemStats.getEquipment() != null)
+                {
+                    switch (attackType.toLowerCase())
+                    {
+                        case "stab":
+                            totalBonus += itemStats.getEquipment().getDstab();
+                            break;
+                        case "slash":
+                            totalBonus += itemStats.getEquipment().getDslash();
+                            break;
+                        case "crush":
+                            totalBonus += itemStats.getEquipment().getDcrush();
+                            break;
+                        case "magic":
+                            totalBonus += itemStats.getEquipment().getDmagic();
+                            break;
+                        case "ranged":
+                            totalBonus += itemStats.getEquipment().getDrange();
+                            break;
+                        default:
+                            totalBonus += itemStats.getEquipment().getDslash();
+                            break;
+                    }
+                }
+            }
+        }
+        return totalBonus;
+    }
+
+    /**
+     * Check if player has void melee set
+     */
+    private boolean hasVoidMelee()
+    {
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return false;
+        }
+
+        boolean hasHelm = false;
+        boolean hasTop = false;
+        boolean hasBottom = false;
+        boolean hasGloves = false;
+
+        for (Item item : equipment.getItems())
+        {
+            int id = item.getId();
+            // Void melee helm
+            if (id == 11665)
+            {
+                hasHelm = true;
+            }
+            // Void knight top
+            if (id == 8839 || id == 10611 || id == 13072)
+            {
+                hasTop = true;
+            }
+            // Void knight robe
+            if (id == 8840 || id == 10612 || id == 13073)
+            {
+                hasBottom = true;
+            }
+            // Void knight gloves
+            if (id == 8842)
+            {
+                hasGloves = true;
+            }
+        }
+
+        return hasHelm && hasTop && hasBottom && hasGloves;
+    }
+
+    /**
+     * Check if player has void ranged set
+     */
+    private boolean hasVoidRanged()
+    {
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return false;
+        }
+
+        boolean hasHelm = false;
+        boolean hasTop = false;
+        boolean hasBottom = false;
+        boolean hasGloves = false;
+
+        for (Item item : equipment.getItems())
+        {
+            int id = item.getId();
+            // Void ranger helm
+            if (id == 11664)
+            {
+                hasHelm = true;
+            }
+            // Void knight top
+            if (id == 8839 || id == 10611 || id == 13072)
+            {
+                hasTop = true;
+            }
+            // Void knight robe
+            if (id == 8840 || id == 10612 || id == 13073)
+            {
+                hasBottom = true;
+            }
+            // Void knight gloves
+            if (id == 8842)
+            {
+                hasGloves = true;
+            }
+        }
+
+        return hasHelm && hasTop && hasBottom && hasGloves;
+    }
+
+    /**
+     * Get strength prayer multiplier
+     */
+    private double getStrengthPrayerMultiplier()
+    {
+        if (client.isPrayerActive(Prayer.BURST_OF_STRENGTH))
+        {
+            return 1.05;
+        }
+        if (client.isPrayerActive(Prayer.SUPERHUMAN_STRENGTH))
+        {
+            return 1.10;
+        }
+        if (client.isPrayerActive(Prayer.ULTIMATE_STRENGTH))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.CHIVALRY))
+        {
+            return 1.18;
+        }
+        if (client.isPrayerActive(Prayer.PIETY))
+        {
+            return 1.23;
+        }
+        return 1.0;
+    }
+
+    /**
+     * Get attack prayer multiplier
+     */
+    private double getAttackPrayerMultiplier()
+    {
+        if (client.isPrayerActive(Prayer.CLARITY_OF_THOUGHT))
+        {
+            return 1.05;
+        }
+        if (client.isPrayerActive(Prayer.IMPROVED_REFLEXES))
+        {
+            return 1.10;
+        }
+        if (client.isPrayerActive(Prayer.INCREDIBLE_REFLEXES))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.CHIVALRY))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.PIETY))
+        {
+            return 1.20;
+        }
+        return 1.0;
+    }
+
+    /**
+     * Get ranged prayer multiplier (attack and strength)
+     */
+    private double getRangedPrayerMultiplier()
+    {
+        if (client.isPrayerActive(Prayer.SHARP_EYE))
+        {
+            return 1.05;
+        }
+        if (client.isPrayerActive(Prayer.HAWK_EYE))
+        {
+            return 1.10;
+        }
+        if (client.isPrayerActive(Prayer.EAGLE_EYE))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.RIGOUR))
+        {
+            return 1.23;
+        }
+        return 1.0;
+    }
+
+    /**
+     * Get magic prayer multiplier
+     */
+    private double getMagicPrayerMultiplier()
+    {
+        if (client.isPrayerActive(Prayer.MYSTIC_WILL))
+        {
+            return 1.05;
+        }
+        if (client.isPrayerActive(Prayer.MYSTIC_LORE))
+        {
+            return 1.10;
+        }
+        if (client.isPrayerActive(Prayer.MYSTIC_MIGHT))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.AUGURY))
+        {
+            return 1.25;
+        }
+        return 1.0;
     }
 
     /**
@@ -258,12 +639,8 @@ public class CombatFormulas
         int effectiveMaxHit = npcMaxHit;
         if (isPrayerActive)
         {
-            // Protection prayers reduce damage
-            String attackType = npcStats.getPrimaryAttackType();
-            if (attackType != null)
-            {
-                effectiveMaxHit = (int) (npcMaxHit * 0.6); // 40% reduction for protection prayers
-            }
+            // Protection prayers reduce damage by 40%
+            effectiveMaxHit = (int) (npcMaxHit * 0.6);
         }
 
         // If max hit can't kill player, no death risk
@@ -287,14 +664,127 @@ public class CombatFormulas
      */
     private double calculateNpcAccuracyAgainstPlayer(NpcCombatStats npcStats)
     {
-        // Simplified - would need player's defensive stats
-        return 0.5; // Default 50% hit chance
+        if (npcStats == null)
+        {
+            return 0.5;
+        }
+
+        // Get NPC's attack roll
+        int npcAttackRoll = calculateNpcAttackRoll(npcStats);
+
+        // Get player's defence roll
+        int playerDefenceRoll = calculatePlayerDefenceRoll(npcStats);
+
+        // Standard accuracy formula
+        if (npcAttackRoll > playerDefenceRoll)
+        {
+            return 1.0 - (playerDefenceRoll + 2.0) / (2.0 * (npcAttackRoll + 1.0));
+        }
+        else
+        {
+            return npcAttackRoll / (2.0 * (playerDefenceRoll + 1.0));
+        }
+    }
+
+    /**
+     * Calculate NPC's attack roll
+     */
+    private int calculateNpcAttackRoll(NpcCombatStats npcStats)
+    {
+        // Get NPC attack level and bonus based on their attack type
+        String attackType = npcStats.getPrimaryAttackType();
+        if (attackType == null)
+        {
+            attackType = "melee";
+        }
+
+        int attackLevel;
+        int attackBonus;
+
+        switch (attackType.toLowerCase())
+        {
+            case "magic":
+                attackLevel = npcStats.getMagicLevel() != null ? npcStats.getMagicLevel() : 1;
+                attackBonus = npcStats.getAttackBonus("magic");
+                break;
+            case "ranged":
+                attackLevel = npcStats.getRangedLevel() != null ? npcStats.getRangedLevel() : 1;
+                attackBonus = npcStats.getAttackBonus("ranged");
+                break;
+            default: // melee
+                attackLevel = npcStats.getAttackLevelOrDefault();
+                attackBonus = npcStats.getAttackBonus(attackType);
+                break;
+        }
+
+        int effectiveLevel = attackLevel + 9;
+        return effectiveLevel * (attackBonus + 64);
+    }
+
+    /**
+     * Calculate player's defence roll against NPC
+     */
+    private int calculatePlayerDefenceRoll(NpcCombatStats npcStats)
+    {
+        String attackType = npcStats.getPrimaryAttackType();
+        if (attackType == null)
+        {
+            attackType = "melee";
+        }
+
+        // Get player defence level
+        int defenceLevel = client.getBoostedSkillLevel(Skill.DEFENCE);
+
+        // Get player's defensive bonus against this attack type
+        int defenceBonus = getPlayerDefenceBonus(attackType);
+
+        // Prayer multipliers for defence
+        double prayerMultiplier = getDefencePrayerMultiplier();
+
+        double effectiveDefence = Math.floor((defenceLevel * prayerMultiplier) + 8 + 1); // +1 for defensive style
+
+        return (int) (effectiveDefence * (defenceBonus + 64));
+    }
+
+    /**
+     * Get prayer defence multiplier
+     */
+    private double getDefencePrayerMultiplier()
+    {
+        if (client.isPrayerActive(Prayer.THICK_SKIN))
+        {
+            return 1.05;
+        }
+        if (client.isPrayerActive(Prayer.ROCK_SKIN))
+        {
+            return 1.10;
+        }
+        if (client.isPrayerActive(Prayer.STEEL_SKIN))
+        {
+            return 1.15;
+        }
+        if (client.isPrayerActive(Prayer.CHIVALRY))
+        {
+            return 1.20;
+        }
+        if (client.isPrayerActive(Prayer.PIETY))
+        {
+            return 1.25;
+        }
+        if (client.isPrayerActive(Prayer.RIGOUR))
+        {
+            return 1.25;
+        }
+        if (client.isPrayerActive(Prayer.AUGURY))
+        {
+            return 1.25;
+        }
+        return 1.0;
     }
 
     /**
      * Calculate cumulative death probability
-     * P(death in n tries) = 1 - (1 - p)^n
-     * But for sequential with different probabilities: 1 - Product(1 - p_i)
+     * P(death over multiple hits) = 1 - Product(1 - p_i)
      */
     public double calculateCumulativeDeathProbability(double currentCumulative, double newHitProbability)
     {

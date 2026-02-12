@@ -49,6 +49,9 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	@Inject
 	private PartyService partyService;
 
+	@Inject
+	private net.runelite.client.game.ItemManager itemManager;
+
 	@Getter
 	private PvMPerformanceTrackerPanel panel;
 
@@ -101,7 +104,7 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 
 		// Initialize NPC stats provider (async to avoid blocking startup)
 		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR);
-		combatFormulas = new CombatFormulas(client);
+		combatFormulas = new CombatFormulas(client, itemManager);
 
 		// Load NPC database in background
 		new Thread(() -> {
