@@ -171,30 +171,41 @@ public class HitsplatListener
         // Get current HP (before hit)
         int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
 
-        // Calculate death probability BEFORE this hit
-        double deathProbability = calculateDeathProbability(currentHp, currentFight, damage);
+        // Calculate death probability BEFORE this hit (even if it's a 0)
+        // This accounts for "what could have happened" not just "what did happen"
+        double deathProbability = calculateDeathProbability(currentHp, currentFight, hitsplat);
         if (deathProbability > 0.0)
         {
             playerStats.addDeathChance(deathProbability);
-            log.debug("Death probability: {}% at {} HP", deathProbability * 100, currentHp);
+            log.debug("Death probability: {}% at {} HP (rolled {})",
+                    String.format("%.1f", deathProbability * 100), currentHp, damage);
         }
 
-        // Classify the damage type
-        DamageType damageType = classifyDamage(currentFight, hitsplat);
+        // Only record actual damage if > 0
+        if (damage > 0)
+        {
+            // Classify the damage type
+            DamageType damageType = classifyDamage(currentFight, hitsplat);
 
-        // Record the damage
-        playerStats.addDamageTaken(damage, damageType, currentTick);
+            // Record the damage
+            playerStats.addDamageTaken(damage, damageType, currentTick);
 
-        log.debug("Player took {} {} damage (HP: {} -> {})",
-                damage, damageType, currentHp, currentHp - damage);
+            log.debug("Player took {} {} damage (HP: {} -> {})",
+                    damage, damageType, currentHp, currentHp - damage);
+        }
+        else
+        {
+            log.debug("Player took 0 damage at {} HP (could have died)", currentHp);
+        }
     }
 
     /**
-     * Calculate probability of death from this hit
+     * Calculate probability of death from this attack
+     * Considers NPC's max hit, not just the damage that was rolled
      */
-    private double calculateDeathProbability(int currentHp, Fight fight, int damageAmount)
+    private double calculateDeathProbability(int currentHp, Fight fight, Hitsplat hitsplat)
     {
-        if (currentHp <= 0 || damageAmount == 0)
+        if (currentHp <= 0)
         {
             return 0.0;
         }
@@ -208,12 +219,12 @@ public class HitsplatListener
 
         if (npcStats == null)
         {
-            // Fallback: simple calculation based on damage dealt
-            // If damage >= current HP, there was death risk
-            if (damageAmount >= currentHp)
+            // Fallback: if we took damage >= current HP, there was death risk
+            int damage = hitsplat.getAmount();
+            if (damage >= currentHp)
             {
-                // Rough estimate: assume 50% hit chance, uniform damage distribution
-                return 0.5 * (damageAmount - currentHp + 1.0) / (damageAmount + 1.0);
+                // We survived but could have died - rough estimate
+                return 0.3; // 30% chance as a rough estimate
             }
             return 0.0;
         }
@@ -221,7 +232,7 @@ public class HitsplatListener
         // Check if prayer is active
         boolean isPrayerActive = isPrayerActive(npcStats);
 
-        // Use combat formulas to calculate death probability
+        // Use combat formulas to calculate death probability based on NPC max hit
         CombatFormulas formulas = plugin.getCombatFormulas();
         if (formulas != null)
         {
@@ -311,6 +322,18 @@ public class HitsplatListener
         if (localPlayer != null && target == lastAttackedNPC)
         {
             return localPlayer.getName();
+        }
+
+        // Additional fallback: check if local player is in combat stance and this is the nearest hostile NPC
+        if (localPlayer != null && localPlayer.getAnimation() != -1)
+        {
+            Actor localTarget = localPlayer.getInteracting();
+            // If player has no current target but is animating, this might be the target
+            if (localTarget == null || localTarget == target)
+            {
+                lastAttackedNPC = target;
+                return localPlayer.getName();
+            }
         }
 
         // Check party members ONLY (if party tracking is enabled)

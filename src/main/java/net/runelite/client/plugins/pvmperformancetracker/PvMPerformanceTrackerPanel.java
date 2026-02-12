@@ -319,9 +319,22 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
                 ticksLost = localStats.calculateTicksLost(currentTick, fight.isActive());
             }
 
+            // Offensive stats
             panel.add(createCompactStatRow("DMG:", DF.format(localStats.getDamageDealt())));
             panel.add(createCompactStatRow("DPS:", DF_DECIMAL.format(localStats.calculateDPS(fight.getDurationTicks()))));
             panel.add(createCompactStatRow("TL:", String.valueOf(ticksLost)));
+
+            // Defensive stats (if any damage taken)
+            if (localStats.getDamageTaken() > 0)
+            {
+                panel.add(createCompactStatRow("DT:", DF.format(localStats.getDamageTaken())));
+            }
+
+            // Death chance (if any)
+            if (localStats.getChancesOfDeath() > 0)
+            {
+                panel.add(createCompactStatRow("DC%:", DF_DECIMAL.format(localStats.getDeathChancePercentage()) + "%"));
+            }
         }
         else
         {
@@ -470,10 +483,41 @@ public class PvMPerformanceTrackerPanel extends PluginPanel
             ticksLost = stats.calculateTicksLost(currentTick, fight.isActive());
         }
 
+        // Offensive stats
         panel.add(createCompactStatRow("DMG:", DF.format(stats.getDamageDealt())));
         panel.add(createCompactStatRow("DPS:", DF_DECIMAL.format(stats.calculateDPS(fight.getDurationTicks()))));
         panel.add(createCompactStatRow("Ticks Lost:", String.valueOf(ticksLost)));
         panel.add(createCompactStatRow("Accuracy:", DF_DECIMAL.format(stats.getAccuracyPercentage()) + "%"));
+
+        // Expected damage stats (if available)
+        if (stats.getExpectedDamageCalculations() > 0)
+        {
+            panel.add(createCompactStatRow("Exp. DMG:", DF.format((int)stats.getExpectedDamageDealt())));
+            panel.add(createCompactStatRow("Exp. DPS:", DF_DECIMAL.format(stats.getExpectedDps(fight.getDurationTicks()))));
+        }
+
+        // Defensive stats
+        if (stats.getDamageTaken() > 0)
+        {
+            panel.add(Box.createVerticalStrut(5));
+            JSeparator separator = new JSeparator();
+            separator.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+            panel.add(separator);
+            panel.add(Box.createVerticalStrut(5));
+
+            panel.add(createCompactStatRow("DMG Taken:", DF.format(stats.getDamageTaken())));
+            panel.add(createCompactStatRow("Avoidable:", DF.format(stats.getAvoidableDamageTaken())));
+            panel.add(createCompactStatRow("Prayable:", DF.format(stats.getPrayableDamageTaken())));
+            panel.add(createCompactStatRow("Unavoidable:", DF.format(stats.getUnavoidableDamageTaken())));
+        }
+
+        // Death chance stats
+        if (stats.getChancesOfDeath() > 0)
+        {
+            panel.add(Box.createVerticalStrut(5));
+            panel.add(createCompactStatRow("Death Chances:", String.valueOf(stats.getChancesOfDeath())));
+            panel.add(createCompactStatRow("Death %:", DF_DECIMAL.format(stats.getDeathChancePercentage()) + "%"));
+        }
 
         return panel;
     }

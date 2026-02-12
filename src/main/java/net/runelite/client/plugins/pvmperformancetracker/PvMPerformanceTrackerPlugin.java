@@ -166,6 +166,13 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		if (fightTracker != null)
 		{
 			fightTracker.onGameTick();
+
+			// Update panel in real-time if there's an active fight
+			// Only update every 2 ticks to reduce overhead
+			if (panel != null && fightTracker.hasActiveFight() && fightTracker.getCurrentTick() % 2 == 0)
+			{
+				panel.updatePanel();
+			}
 		}
 	}
 
