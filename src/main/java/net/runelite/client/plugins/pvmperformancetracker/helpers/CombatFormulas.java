@@ -3,8 +3,9 @@ package net.runelite.client.plugins.pvmperformancetracker.helpers;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
 import net.runelite.client.game.ItemStats;
+import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
+
 /**
  * OSRS combat formula calculations
  * Based on OSRS Wiki formulas
@@ -368,7 +369,7 @@ public class CombatFormulas
         {
             if (item.getId() > 0)
             {
-                net.runelite.client.game.ItemStats itemStats = itemManager.getItemStats(item.getId());
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
                 if (itemStats != null && itemStats.getEquipment() != null)
                 {
                     totalBonus += itemStats.getEquipment().getAmagic();
@@ -394,8 +395,7 @@ public class CombatFormulas
         {
             if (item.getId() > 0)
             {
-                net.runelite.client.game.ItemStats itemStats = itemManager.getItemStats(item.getId());
-                //ItemStats itemStats = itemManager.getItemStats(item.getId(), );
+                ItemStats itemStats = itemManager.getItemStats(item.getId());
                 if (itemStats != null && itemStats.getEquipment() != null)
                 {
                     switch (attackType.toLowerCase())
@@ -619,28 +619,41 @@ public class CombatFormulas
 
     /**
      * Calculate probability of death from a hit
-     * Given current HP and NPC attack
+     * Given current HP and NPC attack (with min/max hit range)
      */
     public double calculateDeathProbability(int currentHp, NpcCombatStats npcStats, boolean isPrayerActive)
+    {
+        return calculateDeathProbability(currentHp, npcStats, isPrayerActive, null, 0);
+    }
+
+    /**
+     * Calculate probability of death from a hit
+     * Overload that accepts minimum hit for more accurate calculations
+     */
+    public double calculateDeathProbability(int currentHp, NpcCombatStats npcStats, boolean isPrayerActive, Integer npcMaxHit, int npcMinHit)
     {
         if (currentHp <= 0 || npcStats == null)
         {
             return 0.0;
         }
 
-        // Get NPC's max hit
-        Integer npcMaxHit = npcStats.getMaxHit();
-        if (npcMaxHit == null || npcMaxHit == 0)
+        // Get NPC's max hit (use provided or from stats)
+        int maxHit = npcMaxHit != null ? npcMaxHit : (npcStats.getMaxHit() != null ? npcStats.getMaxHit() : 0);
+
+        if (maxHit == 0)
         {
             return 0.0;
         }
 
         // Adjust for prayer
-        int effectiveMaxHit = npcMaxHit;
+        int effectiveMaxHit = maxHit;
+        int effectiveMinHit = npcMinHit;
+
         if (isPrayerActive)
         {
             // Protection prayers reduce damage by 40%
-            effectiveMaxHit = (int) (npcMaxHit * 0.6);
+            effectiveMaxHit = (int) (maxHit * 0.6);
+            effectiveMinHit = (int) (npcMinHit * 0.6);
         }
 
         // If max hit can't kill player, no death risk
@@ -652,9 +665,21 @@ public class CombatFormulas
         // Calculate NPC's hit chance against player
         double hitChance = calculateNpcAccuracyAgainstPlayer(npcStats);
 
-        // Probability of hitting lethal damage (currentHp or more)
-        // Assuming uniform distribution from 0 to max hit
-        double lethalDamageChance = (effectiveMaxHit - currentHp + 1.0) / (effectiveMaxHit + 1.0);
+        // Probability of hitting lethal damage
+        // OLD (Wrong): P(lethal) = (maxHit - currentHp + 1) / (maxHit + 1)
+        // NEW (Correct): P(lethal) = (maxHit - currentHp + 1) / (maxHit - minHit + 1)
+
+        // If minimum hit is already lethal, 100% chance of death when hit lands
+        if (effectiveMinHit >= currentHp)
+        {
+            return hitChance; // Guaranteed death if hit lands
+        }
+
+        // Calculate probability of lethal damage in the range [minHit, maxHit]
+        int possibleHits = effectiveMaxHit - effectiveMinHit + 1;
+        int lethalHits = effectiveMaxHit - currentHp + 1;
+
+        double lethalDamageChance = (double) lethalHits / possibleHits;
 
         return hitChance * lethalDamageChance;
     }

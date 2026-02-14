@@ -11,7 +11,8 @@ import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
 import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
 import net.runelite.client.plugins.pvmperformancetracker.models.PlayerStats;
 import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
-
+import net.runelite.client.plugins.pvmperformancetracker.helpers.NpcAttackDatabase;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.NpcAttackTracker;
 @Slf4j
 public class HitsplatListener
 {
@@ -201,7 +202,7 @@ public class HitsplatListener
 
     /**
      * Calculate probability of death from this attack
-     * Considers NPC's max hit, not just the damage that was rolled
+     * Considers NPC's specific attack max hit, not just the damage that was rolled
      */
     private double calculateDeathProbability(int currentHp, Fight fight, Hitsplat hitsplat)
     {
@@ -217,7 +218,59 @@ public class HitsplatListener
             npcStats = plugin.getNpcStatsProvider().getNpcStats(fight.getBossNpcId());
         }
 
-        if (npcStats == null)
+        // Try to get specific attack max hit from database
+        NpcAttackDatabase attackDb = plugin.getNpcAttackDatabase();
+        NpcAttackTracker attackTracker = plugin.getNpcAttackTracker();
+
+        NpcAttackDatabase.AttackData attackData = null;
+
+        if (attackDb != null && attackTracker != null)
+        {
+            // Get the NPC's most recent attack info
+            NPC attackingNpc = findAttackingNpc(fight);
+
+            if (attackingNpc != null)
+            {
+                NpcAttackTracker.AttackInfo attackInfo = attackTracker.getRecentAttack(attackingNpc.getIndex());
+
+                if (attackInfo != null)
+                {
+                    // Get specific attack data (max AND min hit)
+                    attackData = attackDb.getAttackData(
+                            fight.getBossNpcId(),
+                            attackInfo.getAnimationId(),
+                            attackInfo.getProjectileId()
+                    );
+
+                    if (attackData != null)
+                    {
+                        log.debug("Using specific attack data for NPC {} (anim: {}, proj: {}): max={}, min={}",
+                                fight.getBossNpcId(),
+                                attackInfo.getAnimationId(),
+                                attackInfo.getProjectileId(),
+                                attackData.getMaxHit(),
+                                attackData.getMinHit());
+                    }
+                }
+            }
+        }
+
+        // Determine max hit and min hit to use
+        int npcMaxHit;
+        int npcMinHit = 0; // Default: attacks can hit 0
+
+        if (attackData != null)
+        {
+            // Use specific attack data from database
+            npcMaxHit = attackData.getMaxHit();
+            npcMinHit = attackData.getMinHit();
+        }
+        else if (npcStats != null && npcStats.getMaxHit() != null)
+        {
+            // Use general max hit from OSRSBox
+            npcMaxHit = npcStats.getMaxHit();
+        }
+        else
         {
             // Fallback: if we took damage >= current HP, there was death risk
             int damage = hitsplat.getAmount();
@@ -230,16 +283,66 @@ public class HitsplatListener
         }
 
         // Check if prayer is active
-        boolean isPrayerActive = isPrayerActive(npcStats);
+        boolean isPrayerActive = npcStats != null && isPrayerActive(npcStats);
 
-        // Use combat formulas to calculate death probability based on NPC max hit
+        // Use combat formulas to calculate death probability with min/max hit
         CombatFormulas formulas = plugin.getCombatFormulas();
-        if (formulas != null)
+        if (formulas != null && npcStats != null)
         {
-            return formulas.calculateDeathProbability(currentHp, npcStats, isPrayerActive);
+            return formulas.calculateDeathProbability(currentHp, npcStats, isPrayerActive, npcMaxHit, npcMinHit);
         }
 
-        return 0.0;
+        // Fallback calculation
+        int effectiveMaxHit = npcMaxHit;
+        int effectiveMinHit = npcMinHit;
+
+        if (isPrayerActive)
+        {
+            effectiveMaxHit = (int) (npcMaxHit * 0.6);
+            effectiveMinHit = (int) (npcMinHit * 0.6);
+        }
+
+        if (effectiveMaxHit < currentHp)
+        {
+            return 0.0;
+        }
+
+        if (effectiveMinHit >= currentHp)
+        {
+            return 0.5; // 50% hit chance, guaranteed death
+        }
+
+        double hitChance = 0.5;
+        int possibleHits = effectiveMaxHit - effectiveMinHit + 1;
+        int lethalHits = effectiveMaxHit - currentHp + 1;
+        double lethalDamageChance = (double) lethalHits / possibleHits;
+
+        return hitChance * lethalDamageChance;
+    }
+
+    /**
+     * Find the NPC that is attacking the player
+     */
+    private NPC findAttackingNpc(Fight fight)
+    {
+        // Try to find the boss NPC by ID
+        for (NPC npc : client.getNpcs())
+        {
+            if (npc.getId() == fight.getBossNpcId())
+            {
+                // Check if this NPC is targeting the player
+                Player localPlayer = client.getLocalPlayer();
+                if (localPlayer != null && npc.getInteracting() == localPlayer)
+                {
+                    return npc;
+                }
+
+                // If not targeting, return the first matching NPC (assume it's the attacker)
+                return npc;
+            }
+        }
+
+        return null;
     }
 
     /**

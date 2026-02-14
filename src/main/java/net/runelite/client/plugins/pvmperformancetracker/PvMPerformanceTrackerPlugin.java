@@ -82,6 +82,12 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	@Getter
 	private CombatFormulas combatFormulas;
 
+	@Getter
+	private NpcAttackDatabase npcAttackDatabase;
+
+	@Getter
+	private NpcAttackTracker npcAttackTracker;
+
 	// Listeners
 	private HitsplatListener hitsplatListener;
 	private AnimationListener animationListener;
@@ -105,6 +111,8 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		// Initialize NPC stats provider (async to avoid blocking startup)
 		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR);
 		combatFormulas = new CombatFormulas(client, itemManager);
+		npcAttackDatabase = new NpcAttackDatabase();
+		npcAttackTracker = new NpcAttackTracker();
 
 		// Load NPC database in background
 		new Thread(() -> {
@@ -194,6 +202,43 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		if (animationListener != null)
 		{
 			animationListener.onAnimationChanged(event);
+		}
+
+		// Track NPC animations for attack detection
+		if (npcAttackTracker != null && event.getActor() instanceof NPC)
+		{
+			NPC npc = (NPC) event.getActor();
+			int animationId = npc.getAnimation();
+			if (animationId != -1)
+			{
+				npcAttackTracker.recordNpcAnimation(npc, animationId);
+			}
+		}
+	}
+
+	@Subscribe
+	public void onProjectileMoved(ProjectileMoved event)
+	{
+		// Track NPC projectiles for attack detection
+		if (npcAttackTracker != null)
+		{
+			Projectile projectile = event.getProjectile();
+			Actor interacting = projectile.getInteracting();
+
+			// Check if the projectile is targeting the local player
+			Player localPlayer = client.getLocalPlayer();
+			if (localPlayer != null && interacting == localPlayer)
+			{
+				// Find the NPC that spawned this projectile
+				for (NPC npc : client.getNpcs())
+				{
+					if (npc.getInteracting() == localPlayer)
+					{
+						npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
+						break;
+					}
+				}
+			}
 		}
 	}
 
