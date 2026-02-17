@@ -158,6 +158,113 @@ public class HitsplatListener
 //        }
     }
     /**
+     * Handle damage taken by player from NPCs
+     */
+    private void handleDamageToPlayer(Hitsplat hitsplat)
+    {
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
+        {
+            return;
+        }
+
+        FightTracker fightTracker = plugin.getFightTracker();
+        if (fightTracker == null || !fightTracker.hasActiveFight())
+        {
+            return;
+        }
+
+        Fight currentFight = fightTracker.getCurrentFight();
+        if (currentFight == null)
+        {
+            return;
+        }
+
+        int damage = hitsplat.getAmount();
+        int currentTick = client.getTickCount();
+
+        // Find the NPC that dealt this damage
+        NPC attackingNpc = findAttackingNpc(currentFight.getBossNpcId());
+
+        if (attackingNpc == null)
+        {
+            log.debug("Could not determine attacking NPC");
+            return;
+        }
+
+        // Get NPC stats using the NPC OBJECT for variant detection
+        NpcCombatStats npcStats = null;
+        if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
+        {
+            npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc);  // ← USE NPC OBJECT
+        }
+
+        // Determine attack style used
+        String attackStyleUsed = null;
+
+        if (npcStats != null)
+        {
+            // Check if NPC has multiple attack styles
+            if (npcStats.hasMultipleAttackStyles())
+            {
+                // NPC has multiple styles - track animations/projectiles
+                if (plugin.getNpcAttackTracker() != null)
+                {
+                    int npcIndex = attackingNpc.getIndex();
+                    attackStyleUsed = plugin.getNpcAttackTracker().getBestKnownAttackStyle(npcIndex);
+
+                    // Confirm this attack style
+                    if (attackStyleUsed != null)
+                    {
+                        plugin.getNpcAttackTracker().confirmAttackStyle(npcIndex, attackStyleUsed);
+                    }
+                }
+
+                // Fallback to primary if not tracked yet
+                if (attackStyleUsed == null)
+                {
+                    attackStyleUsed = npcStats.getPrimaryAttackStyle();
+                    log.debug("No tracked style yet, using primary: {}", attackStyleUsed);
+                }
+            }
+            else
+            {
+                // NPC has single attack style - use it directly
+                attackStyleUsed = npcStats.getPrimaryAttackStyle();
+            }
+        }
+
+        // Classify the damage type
+        DamageType damageType = classifyDamage(attackingNpc, damage, attackStyleUsed, npcStats);
+
+        // Record damage taken
+        String playerName = localPlayer.getName();
+        PlayerStats stats = currentFight.getPlayerStats().get(playerName);
+        if (playerName != null)
+        {
+            if (stats != null)
+            {
+                stats.addDamageTaken(damage, currentTick, damageType);
+            }
+        }
+
+        log.debug("Player took {} damage (type: {}, style: {})",
+                damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown");
+
+        // Calculate death probability if we have NPC stats
+        if (npcStats != null && attackStyleUsed != null)
+        {
+            double deathProbability = calculateDeathProbability(attackingNpc, attackStyleUsed, npcStats);
+            if (deathProbability > 0.0)
+            {
+                stats.addDeathChance(deathProbability);
+                log.debug("Death probability: {}% at (rolled {})",
+                        String.format("%.1f", deathProbability * 100), damage);
+            }
+        }
+    }
+
+    /**
      * Find the NPC that is attacking the player
      */
     private NPC findAttackingNpc(int bossNpcId)
@@ -174,123 +281,11 @@ public class HitsplatListener
     }
 
     /**
-     * Handle damage dealt to the local player
+     * Classify damage type
      */
-    private void handleDamageToPlayer(Hitsplat hitsplat)
+    private DamageType classifyDamage(NPC attackingNpc, int damage, String attackStyleUsed, NpcCombatStats npcStats)
     {
-        FightTracker fightTracker = plugin.getFightTracker();
-
-        if (fightTracker == null || !fightTracker.hasActiveFight())
-        {
-            return;
-        }
-
-        Player localPlayer = client.getLocalPlayer();
-        if (localPlayer == null)
-        {
-            return;
-        }
-
-        int damage = hitsplat.getAmount();
-        int currentTick = client.getTickCount();
-
-        // Get the NPC that's attacking us
-        Actor interacting = localPlayer.getInteracting();
-        NPC attackingNpc = null;
-
-        if (interacting instanceof NPC)
-        {
-            attackingNpc = (NPC) interacting;
-        }
-
-        // Try to determine attack style used
-        String attackStyleUsed = null;
-        NpcCombatStats npcStats = null;
-
-        if (attackingNpc != null)
-        {
-            // Get NPC stats
-            if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
-            {
-                //npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
-                npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc);
-            }
-
-            if (npcStats != null)
-            {
-                // Check if NPC has multiple attack styles
-                if (npcStats.hasMultipleAttackStyles())
-                {
-                    // Try to get tracked attack style
-                    if (plugin.getNpcAttackTracker() != null)
-                    {
-                        int npcIndex = attackingNpc.getIndex();
-                        attackStyleUsed = plugin.getNpcAttackTracker().getBestKnownAttackStyle(npcIndex);
-
-                        // Confirm if we got a style
-                        if (attackStyleUsed != null)
-                        {
-                            plugin.getNpcAttackTracker().confirmAttackStyle(npcIndex, attackStyleUsed);
-                        }
-                    }
-
-                    // FALLBACK: If no style tracked yet, use primary style
-                    if (attackStyleUsed == null)
-                    {
-                        attackStyleUsed = npcStats.getPrimaryAttackStyle();
-                        log.debug("No tracked style yet, using primary: {}", attackStyleUsed);
-                    }
-                }
-                else
-                {
-                    // NPC has single attack style - use it directly
-                    attackStyleUsed = npcStats.getPrimaryAttackStyle();
-                }
-            }
-        }
-
-
-        // Classify the damage type using the attack style
-        DamageType damageType = classifyDamage(attackingNpc, damage, attackStyleUsed);
-
-        // Record damage taken
-        Fight currentFight = fightTracker.getCurrentFight();
-        if (currentFight != null)
-        {
-            String playerName = localPlayer.getName();
-            PlayerStats stats = currentFight.getPlayerStats().get(playerName);
-            if (stats != null)
-            {
-                stats.addDamageTaken(damage, currentTick, damageType);
-
-                log.debug("Player took {} damage (type: {}, style: {})",
-                        damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown");
-            }
-        }
-
-        // Calculate death probability if we have NPC stats
-        calculateDeathProbability(attackingNpc, attackStyleUsed);
-    }
-
-    /**
-     * Classify damage as Avoidable, Prayable, or Unavoidable
-     * Now uses the specific attack style to determine correct prayer
-     */
-    private DamageType classifyDamage(NPC attackingNpc, int damage, String attackStyleUsed)
-    {
-        if (attackingNpc == null)
-        {
-            return DamageType.UNKNOWN;
-        }
-
-        // Get NPC stats - REUSE if already fetched
-        NpcCombatStats npcStats = null;
-        if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
-        {
-            npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
-        }
-
-        if (npcStats == null)
+        if (attackingNpc == null || npcStats == null)
         {
             return DamageType.UNKNOWN;
         }
@@ -326,12 +321,12 @@ public class HitsplatListener
         }
 
         // Otherwise it's AVOIDABLE (could have been dodged by positioning/movement)
-        // Or it's a special attack type that doesn't fit normal categories
-        return DamageType.AVOIDABLE;
+        return damage == 0 ? DamageType.AVOIDABLE : DamageType.UNAVOIDABLE;
     }
 
+
     /**
-     * Check if player has the correct protection prayer active for a specific attack style
+     * Check if player has correct prayer for the attack style
      */
     private boolean isPrayerActiveForStyle(String attackStyle)
     {
@@ -342,51 +337,44 @@ public class HitsplatListener
 
         String normalized = attackStyle.toLowerCase();
 
-        // Check for melee variants
+        // Check melee prayers
         if (normalized.equals("melee") || normalized.equals("slash") ||
                 normalized.equals("stab") || normalized.equals("crush"))
         {
             return client.isPrayerActive(Prayer.PROTECT_FROM_MELEE);
         }
 
-        // Check for ranged
+        // Check ranged prayer
         if (normalized.equals("ranged"))
         {
             return client.isPrayerActive(Prayer.PROTECT_FROM_MISSILES);
         }
 
-        // Check for magic
+        // Check magic prayer
         if (normalized.equals("magic"))
         {
             return client.isPrayerActive(Prayer.PROTECT_FROM_MAGIC);
         }
 
-        // For special attacks (dragonfire, typeless, etc.), return false
-        // These typically aren't affected by standard protection prayers
         return false;
     }
 
     /**
-     * Calculate death probability based on current HP and NPC attack
+     * Calculate death probability
      */
-    private void calculateDeathProbability(NPC attackingNpc, String attackStyleUsed)
+    private double calculateDeathProbability(NPC attackingNpc, String attackStyleUsed, NpcCombatStats npcStats)
     {
-        if (attackingNpc == null || plugin.getNpcStatsProvider() == null)
+
+        double deathProb = 0.0;
+        if (attackingNpc == null || npcStats == null)
         {
-            return;
+            return deathProb;
         }
 
         Player localPlayer = client.getLocalPlayer();
         if (localPlayer == null)
         {
-            return;
-        }
-
-        // Get NPC stats
-        var npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
-        if (npcStats == null)
-        {
-            return;
+            return deathProb;
         }
 
         // Get current HP
@@ -399,18 +387,10 @@ public class HitsplatListener
         CombatFormulas combatFormulas = plugin.getCombatFormulas();
         if (combatFormulas != null)
         {
-            double deathProb = combatFormulas.calculateDeathProbability(
+            deathProb = combatFormulas.calculateDeathProbability(
                     currentHp, npcStats, attackStyleUsed, hasCorrectPrayer);
-
-            // LOWER THRESHOLD - always log if > 0.001 (0.1%) OR if HP < 30
-            if (deathProb > 0.001 || currentHp < 30)
-            {
-                // FIX THE LOGGING FORMAT (was showing {:.2f}% literally)
-                log.info(String.format("Death probability: %.2f%% (HP: %d, Style: %s, Prayer: %b)",
-                        deathProb * 100, currentHp,
-                        attackStyleUsed != null ? attackStyleUsed : "unknown", hasCorrectPrayer));
-            }
         }
+        return deathProb;
     }
 
     /**
@@ -423,9 +403,13 @@ public class HitsplatListener
             return false;
         }
 
-        // Use boss detection helper
-        return plugin.getBossDetectionHelper() != null &&
-                plugin.getBossDetectionHelper().isBoss(npc);
+        if (plugin.getConfig().trackBossesOnly())
+        {
+            return plugin.getBossDetectionHelper() != null &&
+                    plugin.getBossDetectionHelper().isBoss(npc);
+        }
+
+        return true;
     }
 
     /**

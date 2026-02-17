@@ -3,7 +3,6 @@ package net.runelite.client.plugins.pvmperformancetracker.helpers;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.NPC;
-import net.runelite.client.plugins.pvmperformancetracker.models.AttackStyleMapping;
 
 import java.util.HashMap;
 import java.util.Map;

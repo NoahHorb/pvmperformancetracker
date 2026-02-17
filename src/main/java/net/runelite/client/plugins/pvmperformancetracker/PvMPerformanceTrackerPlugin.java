@@ -11,7 +11,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.plugins.pvmperformancetracker.models.AttackStyleMapping;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.AttackStyleMapping;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -63,13 +63,7 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	private FightTracker fightTracker;
 
 	@Getter
-	private DamageCalculator damageCalculator;
-
-	@Getter
-	private DamageClassifier damageClassifier;
-
-	@Getter
-	private WeaponSpeedHelper weaponSpeedHelper;
+	private PlayerAttackStyleHelper playerAttackStyleHelper = new PlayerAttackStyleHelper();
 
 	@Getter
 	private BossDetectionHelper bossDetectionHelper;
@@ -103,12 +97,9 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 
 		// Initialize managers and helpers
 		fightTracker = new FightTracker(this, client);
-		damageCalculator = new DamageCalculator(client);
-		damageClassifier = new DamageClassifier(client);
-		weaponSpeedHelper = new WeaponSpeedHelper(client);
-		bossDetectionHelper = new BossDetectionHelper();
+        bossDetectionHelper = new BossDetectionHelper();
 		partyStatsManager = new PartyStatsManager(this, client, partyService);
-		bossVariantHelper = new BossVariantHelper(client);
+		bossVariantHelper = new BossVariantHelper();
 		// Initialize NPC stats provider (async to avoid blocking startup)
 		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR, client);
 		combatFormulas = new CombatFormulas(client, itemManager);

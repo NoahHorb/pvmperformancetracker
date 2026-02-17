@@ -5,11 +5,13 @@ import lombok.Data;
 
 import java.util.HashMap;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * NPC combat stats from custom NPC database
  * Supports NPCs with multiple attack styles and varying max/min hits
  */
+@Slf4j
 @Data
 public class NpcCombatStats
 {
@@ -131,13 +133,38 @@ public class NpcCombatStats
      */
     public int getMaxHitForStyle(String style)
     {
+        log.debug("=== getMaxHitForStyle DEBUG ===");
+        log.debug("Input style: '{}'", style);
+        log.debug("maxHit map is null: {}", maxHit == null);
+
         if (maxHit == null || style == null)
         {
+            log.debug("Returning 0 - maxHit or style is null");
+            log.debug("===============================");
             return 0;
         }
 
+        log.debug("maxHit map contents: {}", maxHit);
+        log.debug("maxHit map size: {}", maxHit.size());
+
         String normalizedStyle = normalizeAttackStyle(style);
-        return maxHit.getOrDefault(normalizedStyle, 0);
+        log.debug("Normalized style: '{}'", normalizedStyle);
+
+        int result = maxHit.getOrDefault(normalizedStyle, 0);
+        log.debug("Result for style '{}': {}", normalizedStyle, result);
+
+        // Show what keys ARE available if we got 0
+        if (result == 0)
+        {
+            log.debug("No max hit found for '{}'. Available keys in maxHit map:", normalizedStyle);
+            for (String key : maxHit.keySet())
+            {
+                log.debug("  - Key: '{}' -> Value: {}", key, maxHit.get(key));
+            }
+        }
+
+        log.debug("===============================");
+        return result;
     }
 
     /**
@@ -226,6 +253,8 @@ public class NpcCombatStats
      */
     private String normalizeAttackStyle(String style)
     {
+
+        log.debug("Input style: '{}'", style);
         if (style == null)
         {
             return "melee";

@@ -1,4 +1,4 @@
-package net.runelite.client.plugins.pvmperformancetracker.models;
+package net.runelite.client.plugins.pvmperformancetracker.helpers;
 
 import lombok.Data;
 import java.util.HashMap;
@@ -80,9 +80,9 @@ public class AttackStyleMapping
     public static void initializeCommonBossMappings()
     {
         // Vardorvis (12223)
-        registerAnimation(12223, 10340, "melee"); // Standard melee attack
-        registerAnimation(12223, 10341, "melee"); // Axe swing
-        registerAnimation(12223, 10342, "melee"); // Another melee variant
+        registerAnimation(12223, 10340, "slash"); // Standard melee attack
+        registerAnimation(12223, 10341, "axes"); // Axe swing
+        registerAnimation(12223, 10342, "slash"); // Another melee variant
         // Note: Vardorvis has special mechanics, add more as discovered
 
         // Vorkath (8059, 8061)

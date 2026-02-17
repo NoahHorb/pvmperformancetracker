@@ -46,7 +46,7 @@ public class CombatFormulas
     }
 
     /**
-     * Calculate player's max hit
+     * Calculate player's max hit from attack style
      */
     public int calculateMaxHit(String attackStyle)
     {
@@ -74,7 +74,7 @@ public class CombatFormulas
     }
 
     /**
-     * Calculate melee max hit
+     * Calculate players melee max hit
      * Formula: floor(0.5 + Strength Level * (Strength Bonus + 64) / 640)
      */
     private int calculateMeleeMaxHit()
@@ -96,15 +96,15 @@ public class CombatFormulas
         int maxHit = (int) Math.floor(baseDamage * voidMultiplier);
 
         // DEBUG LOGGING
-        log.debug("=== Max Hit Calculation ===");
-        log.debug("Strength level: {}", strengthLevel);
-        log.debug("Strength bonus: {}", strengthBonus);
-        log.debug("Prayer multiplier: {}", String.format("%.2f", prayerMultiplier));
-        log.debug("Void multiplier: {}", String.format("%.2f", voidMultiplier));
-        log.debug("Effective strength: {}", String.format("%.2f", effectiveStrength));
-        log.debug("Base damage: {}", String.format("%.2f", baseDamage));
-        log.debug("Final max hit: {}", maxHit);
-        log.debug("===========================");
+//        log.debug("=== Max Hit Calculation ===");
+//        log.debug("Strength level: {}", strengthLevel);
+//        log.debug("Strength bonus: {}", strengthBonus);
+//        log.debug("Prayer multiplier: {}", String.format("%.2f", prayerMultiplier));
+//        log.debug("Void multiplier: {}", String.format("%.2f", voidMultiplier));
+//        log.debug("Effective strength: {}", String.format("%.2f", effectiveStrength));
+//        log.debug("Base damage: {}", String.format("%.2f", baseDamage));
+//        log.debug("Final max hit: {}", maxHit);
+//        log.debug("===========================");
 
         return maxHit;
     }
@@ -169,14 +169,14 @@ public class CombatFormulas
         }
 
         // DEBUG LOGGING
-        log.debug("=== Accuracy Calculation ===");
-        log.debug("Attack style: {}", attackStyle);
-        log.debug("Player attack roll: {}", attackRoll);
-        log.debug("NPC defence roll: {}", defenceRoll);
-        log.debug("Accuracy: {} ({}%)",
-                String.format("%.4f", accuracy),
-                String.format("%.2f", accuracy * 100));
-        log.debug("============================");
+//        log.debug("=== Accuracy Calculation ===");
+//        log.debug("Attack style: {}", attackStyle);
+//        log.debug("Player attack roll: {}", attackRoll);
+//        log.debug("NPC defence roll: {}", defenceRoll);
+//        log.debug("Accuracy: {} ({}%)",
+//                String.format("%.4f", accuracy),
+//                String.format("%.2f", accuracy * 100));
+//        log.debug("============================");
 
         return accuracy;
     }
@@ -196,19 +196,22 @@ public class CombatFormulas
     {
         if (currentHp <= 0 || npcStats == null)
         {
+            log.debug("Null npc stats or 0 hp");
             return 0.0;
         }
 
         // Use primary attack style if none specified
         if (attackStyle == null || attackStyle.isEmpty())
         {
+            log.debug("Attack style null: {}", attackStyle);
             attackStyle = npcStats.getPrimaryAttackStyle();
+            log.debug("Attack style after defaulted: {}", attackStyle);
         }
 
         // Get max and min hit for this specific attack style
         int maxHit = npcStats.getMaxHitForStyle(attackStyle);
         int minHit = npcStats.getMinHitForStyle(attackStyle);
-
+        log.debug("min hit {} max hit: {}", minHit, maxHit);
         if (maxHit == 0)
         {
             return 0.0;
@@ -220,7 +223,7 @@ public class CombatFormulas
         // Apply prayer reduction
         int effectiveMaxHit = (int) Math.floor(maxHit * prayerReduction);
         int effectiveMinHit = (int) Math.floor(minHit * prayerReduction);
-
+        log.debug("effective min hit {} max hit: {}", effectiveMinHit, effectiveMaxHit);
         // If max hit can't kill player, no death risk
         if (effectiveMaxHit < currentHp)
         {
@@ -241,7 +244,6 @@ public class CombatFormulas
         int lethalHits = effectiveMaxHit - currentHp + 1;
 
         double lethalDamageChance = (double) lethalHits / possibleHits;
-
         return hitChance * lethalDamageChance;
     }
 
@@ -256,6 +258,8 @@ public class CombatFormulas
      */
     private double getPrayerReductionMultiplier(NpcCombatStats npcStats, String attackStyle, boolean hasCorrectPrayer)
     {
+        log.debug("has correct prayer: {}", hasCorrectPrayer);
+
         if (!hasCorrectPrayer)
         {
             return 1.0; // No prayer = full damage
@@ -273,9 +277,9 @@ public class CombatFormulas
         // Special cases where prayer doesn't work or has reduced effectiveness
 
         // Dragonfire attacks - prayer doesn't reduce dragonfire
-        if (normalizedStyle.contains("dragonfire") || normalizedStyle.contains("fire"))
+        if (normalizedStyle.contains("dragonfire"))
         {
-            return 1.0; // Prayer doesn't affect dragonfire
+            return .75; // prayer protects about 25% of dragonfire
         }
 
         // Typeless attacks - prayer doesn't work
@@ -283,16 +287,15 @@ public class CombatFormulas
         {
             return 1.0;
         }
-
+        //TODO - curate full prayer negation
         // NPC-specific prayer effectiveness
         if (npcName != null)
         {
             String lowerName = npcName.toLowerCase();
 
-            // Vardorvis - Prayer only reduces by ~25% instead of 40%
             if (lowerName.contains("vardorvis"))
             {
-                return 0.75; // 25% reduction instead of 40%
+                return 0.25; // 75% negated
             }
 
             // Dagannoth Rex/Prime/Supreme - Prayer completely blocks their primary style
@@ -317,8 +320,8 @@ public class CombatFormulas
             // Add more special cases here as needed
         }
 
-        // Standard protection prayers - 40% reduction (multiply by 0.6)
-        return 0.6;
+        // Standard protection prayers - full damage negation. A
+        return 0;
     }
 
     /**
@@ -333,19 +336,33 @@ public class CombatFormulas
 
         // Get NPC's attack roll for this style
         int npcAttackRoll = calculateNpcAttackRoll(npcStats, attackStyle);
-
         // Get player's defence roll against this style
         int playerDefenceRoll = calculatePlayerDefenceRoll(attackStyle);
+
+        double accuracy;
+
+
 
         // Standard accuracy formula
         if (npcAttackRoll > playerDefenceRoll)
         {
-            return 1.0 - (playerDefenceRoll + 2.0) / (2.0 * (npcAttackRoll + 1.0));
+            accuracy =  1.0 - (playerDefenceRoll + 2.0) / (2.0 * (npcAttackRoll + 1.0));
         }
         else
         {
-            return npcAttackRoll / (2.0 * (playerDefenceRoll + 1.0));
+            accuracy =npcAttackRoll / (2.0 * (playerDefenceRoll + 1.0));
         }
+        // DEBUG LOGGING
+        log.debug("=== Accuracy Calculation ===");
+        log.debug("npc Attack style: {}", attackStyle);
+        log.debug("npc attack roll: {}", npcAttackRoll);
+        log.debug("player  defence roll: {}", playerDefenceRoll);
+        log.debug("Accuracy: {} ({}%)",
+                String.format("%.4f", accuracy),
+                String.format("%.2f", accuracy * 100));
+        log.debug("============================");
+        return accuracy;
+
     }
 
     /**

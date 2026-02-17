@@ -6,7 +6,9 @@ import net.runelite.api.NPC;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
-
+/**
+ * This is only used for boss only tracking - Might remove
+ */
 @Slf4j
 public class BossDetectionHelper
 {

@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Loads and caches NPC combat stats from custom NPC database
+ * downloads and caches NPC combat stats from custom NPC database
  */
 @Slf4j
 public class NpcStatsProvider
@@ -65,7 +65,7 @@ public class NpcStatsProvider
      */
     public void initialize()
     {
-        this.bossVariantHelper = new BossVariantHelper(client);
+        this.bossVariantHelper = new BossVariantHelper();
         Path cacheFile = cacheDirectory.resolve(CACHE_FILE_NAME);
 
         // Check if cache exists and is recent (less than 7 days old)

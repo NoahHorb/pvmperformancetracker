@@ -4,7 +4,7 @@ import net.runelite.client.config.*;
 import net.runelite.client.plugins.pvmperformancetracker.enums.TrackingMode;
 
 import java.awt.Color;
-
+//TODO - add preset overlay options - i.e hcim mode (shows chance of % total chances)
 @ConfigGroup("pvmperformancetracker")
 public interface PvMPerformanceTrackerConfig extends Config
 {
