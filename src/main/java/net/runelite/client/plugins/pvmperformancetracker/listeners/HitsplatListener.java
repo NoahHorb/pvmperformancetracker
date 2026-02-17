@@ -11,8 +11,7 @@ import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
 import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
 import net.runelite.client.plugins.pvmperformancetracker.models.PlayerStats;
 import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.NpcAttackDatabase;
-import net.runelite.client.plugins.pvmperformancetracker.helpers.NpcAttackTracker;
+
 @Slf4j
 public class HitsplatListener
 {
@@ -70,20 +69,18 @@ public class HitsplatListener
             return;
         }
 
+        String npcName = npc.getName();
+        int npcId = npc.getId();
         int damage = hitsplat.getAmount();
-        String targetName = npc.getName();
-        int targetId = npc.getId();
+        int currentTick = client.getTickCount();
 
-        // Try to determine which player dealt this damage (PARTY MEMBERS ONLY)
         String playerName = determineHitsplatSource(npc);
-
         if (playerName == null)
         {
-            log.debug("Skipping hitsplat to {}: could not determine source (not party member or local player)", targetName);
+            log.debug("Skipping hitsplat to {}: could not determine source (not party member or local player)", npcName);
             return; // Not from party member or local player
         }
-
-        log.debug("Processing hitsplat: {} damage to {} from {}", damage, targetName, playerName);
+        log.debug("Processing hitsplat: {} damage to {} from {}", damage, npcName, playerName);
 
         FightTracker fightTracker = plugin.getFightTracker();
         if (fightTracker == null)
@@ -91,35 +88,35 @@ public class HitsplatListener
             return;
         }
 
-        // START FIGHT ON FIRST HITSPLAT
+
         Fight currentFight = fightTracker.getCurrentFight();
 
         log.debug("Hitsplat check: currentFight={}, active={}, targetId={}, currentId={}",
                 currentFight != null ? currentFight.getBossName() : "null",
                 currentFight != null ? currentFight.isActive() : false,
-                targetId,
+                npcId,
                 currentFight != null ? currentFight.getBossNpcId() : -1);
 
         if (currentFight == null || !currentFight.isActive())
         {
             // No active fight - start new one on this first hitsplat
-            log.debug("Starting new fight on first hitsplat to {} (damage: {})", targetName, damage);
-            fightTracker.startNewFight(targetName, targetId);
+            log.debug("Starting new fight on first hitsplat to {} (damage: {})", npcName, damage);
+            fightTracker.startNewFight(npcName, npcId);
             currentFight = fightTracker.getCurrentFight();
         }
-        else if (currentFight.getBossNpcId() != targetId)
+        else if (currentFight.getBossNpcId() != npcId)
         {
             // Different target than current fight
-            log.debug("Different NPC - current: {}, new: {}", currentFight.getBossNpcId(), targetId);
+            log.debug("Different NPC - current: {}, new: {}", currentFight.getBossNpcId(), npcId);
             fightTracker.endCurrentFight();
-            fightTracker.startNewFight(targetName, targetId);
+            fightTracker.startNewFight(npcName, npcId);
             currentFight = fightTracker.getCurrentFight();
         }
 
         // Record the damage (even if 0)
         if (currentFight != null && currentFight.isActive())
         {
-            fightTracker.addDamageDealt(playerName, damage, targetName);
+            fightTracker.addDamageDealt(playerName, damage, npcName);
 
             // Track this NPC for death detection
             if (plugin.getCombatEventListener() != null)
@@ -128,23 +125,64 @@ public class HitsplatListener
             }
 
             log.debug("{} dealt {} damage to {} (fight: {})",
-                    playerName, damage, targetName, currentFight.getBossName());
+                    playerName, damage, npcName, currentFight.getBossName());
         }
         else
         {
             log.debug("NOT recording damage - fight is null or inactive");
         }
+//
+//        // Start a new fight if not already active
+//        if (!fightTracker.hasActiveFight())
+//        {
+//            fightTracker.startNewFight(npcName, npcId);
+//            log.debug("Fight started against {} (ID: {})", npcName, npcId);
+//        }
+//
+//        // Verify we're hitting the correct boss
+//        Fight currentFight = fightTracker.getCurrentFight();
+//        if (currentFight == null || currentFight.getBossNpcId() != npcId)
+//        {
+//            return;
+//        }
+//
+//        // Determine which player caused this hitsplat
+//        String damageDealer = determineHitsplatSource(npc);
+//        if (damageDealer != null)
+//        {
+//            PlayerStats stats = currentFight.getPlayerStats().get(damageDealer);
+//            if (stats != null)
+//            {
+//                stats.addDamageDealt(damage, currentTick, npcName);
+//            }
+//        }
+    }
+    /**
+     * Find the NPC that is attacking the player
+     */
+    private NPC findAttackingNpc(int bossNpcId)
+    {
+        // Find the boss NPC in the world
+        for (NPC npc : client.getNpcs())
+        {
+            if (npc != null && npc.getId() == bossNpcId)
+            {
+                return npc;
+            }
+        }
+        return null;
     }
 
     /**
-     * Handle damage taken by the local player
+     * Handle damage dealt to the local player
      */
     private void handleDamageToPlayer(Hitsplat hitsplat)
     {
         FightTracker fightTracker = plugin.getFightTracker();
+
         if (fightTracker == null || !fightTracker.hasActiveFight())
         {
-            return; // No active fight to track
+            return;
         }
 
         Player localPlayer = client.getLocalPlayer();
@@ -153,233 +191,103 @@ public class HitsplatListener
             return;
         }
 
-        Fight currentFight = fightTracker.getCurrentFight();
-        if (currentFight == null || !currentFight.isActive())
-        {
-            return;
-        }
-
         int damage = hitsplat.getAmount();
-        int currentTick = fightTracker.getCurrentTick();
+        int currentTick = client.getTickCount();
 
-        // Get local player stats
-        PlayerStats playerStats = currentFight.getLocalPlayerStats();
-        if (playerStats == null)
+        // Get the NPC that's attacking us
+        Actor interacting = localPlayer.getInteracting();
+        NPC attackingNpc = null;
+
+        if (interacting instanceof NPC)
         {
-            return;
+            attackingNpc = (NPC) interacting;
         }
 
-        // Get current HP (before hit)
-        int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
-
-        // Calculate death probability BEFORE this hit (even if it's a 0)
-        // This accounts for "what could have happened" not just "what did happen"
-        double deathProbability = calculateDeathProbability(currentHp, currentFight, hitsplat);
-        if (deathProbability > 0.0)
-        {
-            playerStats.addDeathChance(deathProbability);
-            log.debug("Death probability: {}% at {} HP (rolled {})",
-                    String.format("%.1f", deathProbability * 100), currentHp, damage);
-        }
-
-        // Only record actual damage if > 0
-        if (damage > 0)
-        {
-            // Classify the damage type
-            DamageType damageType = classifyDamage(currentFight, hitsplat);
-
-            // Record the damage
-            playerStats.addDamageTaken(damage, damageType, currentTick);
-
-            log.debug("Player took {} {} damage (HP: {} -> {})",
-                    damage, damageType, currentHp, currentHp - damage);
-        }
-        else
-        {
-            log.debug("Player took 0 damage at {} HP (could have died)", currentHp);
-        }
-    }
-
-    /**
-     * Calculate probability of death from this attack
-     * Considers NPC's specific attack max hit, not just the damage that was rolled
-     */
-    private double calculateDeathProbability(int currentHp, Fight fight, Hitsplat hitsplat)
-    {
-        if (currentHp <= 0)
-        {
-            return 0.0;
-        }
-
-        // Get NPC stats
+        // Try to determine attack style used
+        String attackStyleUsed = null;
         NpcCombatStats npcStats = null;
-        if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
+
+        if (attackingNpc != null)
         {
-            npcStats = plugin.getNpcStatsProvider().getNpcStats(fight.getBossNpcId());
-        }
-
-        // Try to get specific attack max hit from database
-        NpcAttackDatabase attackDb = plugin.getNpcAttackDatabase();
-        NpcAttackTracker attackTracker = plugin.getNpcAttackTracker();
-
-        NpcAttackDatabase.AttackData attackData = null;
-
-        if (attackDb != null && attackTracker != null)
-        {
-            // Get the NPC's most recent attack info
-            NPC attackingNpc = findAttackingNpc(fight);
-
-            if (attackingNpc != null)
+            // Get NPC stats
+            if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
             {
-                NpcAttackTracker.AttackInfo attackInfo = attackTracker.getRecentAttack(attackingNpc.getIndex());
+                //npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
+                npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc);
+            }
 
-                if (attackInfo != null)
+            if (npcStats != null)
+            {
+                // Check if NPC has multiple attack styles
+                if (npcStats.hasMultipleAttackStyles())
                 {
-                    // Get specific attack data (max AND min hit)
-                    attackData = attackDb.getAttackData(
-                            fight.getBossNpcId(),
-                            attackInfo.getAnimationId(),
-                            attackInfo.getProjectileId()
-                    );
-
-                    if (attackData != null)
+                    // Try to get tracked attack style
+                    if (plugin.getNpcAttackTracker() != null)
                     {
-                        log.debug("Using specific attack data for NPC {} (anim: {}, proj: {}): max={}, min={}",
-                                fight.getBossNpcId(),
-                                attackInfo.getAnimationId(),
-                                attackInfo.getProjectileId(),
-                                attackData.getMaxHit(),
-                                attackData.getMinHit());
+                        int npcIndex = attackingNpc.getIndex();
+                        attackStyleUsed = plugin.getNpcAttackTracker().getBestKnownAttackStyle(npcIndex);
+
+                        // Confirm if we got a style
+                        if (attackStyleUsed != null)
+                        {
+                            plugin.getNpcAttackTracker().confirmAttackStyle(npcIndex, attackStyleUsed);
+                        }
+                    }
+
+                    // FALLBACK: If no style tracked yet, use primary style
+                    if (attackStyleUsed == null)
+                    {
+                        attackStyleUsed = npcStats.getPrimaryAttackStyle();
+                        log.debug("No tracked style yet, using primary: {}", attackStyleUsed);
                     }
                 }
-            }
-        }
-
-        // Determine max hit and min hit to use
-        int npcMaxHit;
-        int npcMinHit = 0; // Default: attacks can hit 0
-
-        if (attackData != null)
-        {
-            // Use specific attack data from database
-            npcMaxHit = attackData.getMaxHit();
-            npcMinHit = attackData.getMinHit();
-        }
-        else if (npcStats != null && npcStats.getMaxHit() != null)
-        {
-            // Use general max hit from OSRSBox
-            npcMaxHit = npcStats.getMaxHit();
-        }
-        else
-        {
-            // Fallback: if we took damage >= current HP, there was death risk
-            int damage = hitsplat.getAmount();
-            if (damage >= currentHp)
-            {
-                // We survived but could have died - rough estimate
-                return 0.3; // 30% chance as a rough estimate
-            }
-            return 0.0;
-        }
-
-        // Check if prayer is active
-        boolean isPrayerActive = npcStats != null && isPrayerActive(npcStats);
-
-        // Use combat formulas to calculate death probability with min/max hit
-        CombatFormulas formulas = plugin.getCombatFormulas();
-        if (formulas != null && npcStats != null)
-        {
-            return formulas.calculateDeathProbability(currentHp, npcStats, isPrayerActive, npcMaxHit, npcMinHit);
-        }
-
-        // Fallback calculation
-        int effectiveMaxHit = npcMaxHit;
-        int effectiveMinHit = npcMinHit;
-
-        if (isPrayerActive)
-        {
-            effectiveMaxHit = (int) (npcMaxHit * 0.6);
-            effectiveMinHit = (int) (npcMinHit * 0.6);
-        }
-
-        if (effectiveMaxHit < currentHp)
-        {
-            return 0.0;
-        }
-
-        if (effectiveMinHit >= currentHp)
-        {
-            return 0.5; // 50% hit chance, guaranteed death
-        }
-
-        double hitChance = 0.5;
-        int possibleHits = effectiveMaxHit - effectiveMinHit + 1;
-        int lethalHits = effectiveMaxHit - currentHp + 1;
-        double lethalDamageChance = (double) lethalHits / possibleHits;
-
-        return hitChance * lethalDamageChance;
-    }
-
-    /**
-     * Find the NPC that is attacking the player
-     */
-    private NPC findAttackingNpc(Fight fight)
-    {
-        // Try to find the boss NPC by ID
-        for (NPC npc : client.getNpcs())
-        {
-            if (npc.getId() == fight.getBossNpcId())
-            {
-                // Check if this NPC is targeting the player
-                Player localPlayer = client.getLocalPlayer();
-                if (localPlayer != null && npc.getInteracting() == localPlayer)
+                else
                 {
-                    return npc;
+                    // NPC has single attack style - use it directly
+                    attackStyleUsed = npcStats.getPrimaryAttackStyle();
                 }
-
-                // If not targeting, return the first matching NPC (assume it's the attacker)
-                return npc;
             }
         }
 
-        return null;
-    }
 
-    /**
-     * Check if player has appropriate protection prayer active
-     */
-    private boolean isPrayerActive(NpcCombatStats npcStats)
-    {
-        String attackType = npcStats.getPrimaryAttackType();
-        if (attackType == null)
+        // Classify the damage type using the attack style
+        DamageType damageType = classifyDamage(attackingNpc, damage, attackStyleUsed);
+
+        // Record damage taken
+        Fight currentFight = fightTracker.getCurrentFight();
+        if (currentFight != null)
         {
-            return false;
+            String playerName = localPlayer.getName();
+            PlayerStats stats = currentFight.getPlayerStats().get(playerName);
+            if (stats != null)
+            {
+                stats.addDamageTaken(damage, currentTick, damageType);
+
+                log.debug("Player took {} damage (type: {}, style: {})",
+                        damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown");
+            }
         }
 
-        // Check if relevant protection prayer is active
-        switch (attackType.toLowerCase())
-        {
-            case "melee":
-                return client.isPrayerActive(Prayer.PROTECT_FROM_MELEE);
-            case "ranged":
-                return client.isPrayerActive(Prayer.PROTECT_FROM_MISSILES);
-            case "magic":
-                return client.isPrayerActive(Prayer.PROTECT_FROM_MAGIC);
-            default:
-                return false;
-        }
+        // Calculate death probability if we have NPC stats
+        calculateDeathProbability(attackingNpc, attackStyleUsed);
     }
 
     /**
      * Classify damage as Avoidable, Prayable, or Unavoidable
+     * Now uses the specific attack style to determine correct prayer
      */
-    private DamageType classifyDamage(Fight fight, Hitsplat hitsplat)
+    private DamageType classifyDamage(NPC attackingNpc, int damage, String attackStyleUsed)
     {
-        // Get NPC stats
+        if (attackingNpc == null)
+        {
+            return DamageType.UNKNOWN;
+        }
+
+        // Get NPC stats - REUSE if already fetched
         NpcCombatStats npcStats = null;
         if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
         {
-            npcStats = plugin.getNpcStatsProvider().getNpcStats(fight.getBossNpcId());
+            npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
         }
 
         if (npcStats == null)
@@ -387,23 +295,153 @@ public class HitsplatListener
             return DamageType.UNKNOWN;
         }
 
-        // Check if appropriate prayer was active
-        boolean hadCorrectPrayer = isPrayerActive(npcStats);
+        // If attack style is unknown, try to get primary style as fallback
+        if (attackStyleUsed == null || attackStyleUsed.isEmpty())
+        {
+            attackStyleUsed = npcStats.getPrimaryAttackStyle();
+            log.debug("Using fallback attack style: {}", attackStyleUsed);
+        }
+
+        // Check if player had the CORRECT prayer active for this specific attack style
+        boolean hadCorrectPrayer = isPrayerActiveForStyle(attackStyleUsed);
 
         // If prayer was active and still took damage, it's UNAVOIDABLE
-        if (hadCorrectPrayer && hitsplat.getAmount() > 0)
+        // (either typeless damage, or damage that goes through prayer)
+        if (hadCorrectPrayer && damage > 0)
         {
             return DamageType.UNAVOIDABLE;
         }
 
         // If prayer wasn't active but should have been, it's PRAYABLE
-        if (!hadCorrectPrayer)
+        if (!hadCorrectPrayer && attackStyleUsed != null)
         {
-            return DamageType.PRAYABLE;
+            // Check if this attack style is prayable (melee/ranged/magic)
+            String normalized = attackStyleUsed.toLowerCase();
+            if (normalized.equals("melee") || normalized.equals("slash") ||
+                    normalized.equals("stab") || normalized.equals("crush") ||
+                    normalized.equals("ranged") || normalized.equals("magic"))
+            {
+                return DamageType.PRAYABLE;
+            }
         }
 
         // Otherwise it's AVOIDABLE (could have been dodged by positioning/movement)
+        // Or it's a special attack type that doesn't fit normal categories
         return DamageType.AVOIDABLE;
+    }
+
+    /**
+     * Check if player has the correct protection prayer active for a specific attack style
+     */
+    private boolean isPrayerActiveForStyle(String attackStyle)
+    {
+        if (attackStyle == null)
+        {
+            return false;
+        }
+
+        String normalized = attackStyle.toLowerCase();
+
+        // Check for melee variants
+        if (normalized.equals("melee") || normalized.equals("slash") ||
+                normalized.equals("stab") || normalized.equals("crush"))
+        {
+            return client.isPrayerActive(Prayer.PROTECT_FROM_MELEE);
+        }
+
+        // Check for ranged
+        if (normalized.equals("ranged"))
+        {
+            return client.isPrayerActive(Prayer.PROTECT_FROM_MISSILES);
+        }
+
+        // Check for magic
+        if (normalized.equals("magic"))
+        {
+            return client.isPrayerActive(Prayer.PROTECT_FROM_MAGIC);
+        }
+
+        // For special attacks (dragonfire, typeless, etc.), return false
+        // These typically aren't affected by standard protection prayers
+        return false;
+    }
+
+    /**
+     * Calculate death probability based on current HP and NPC attack
+     */
+    private void calculateDeathProbability(NPC attackingNpc, String attackStyleUsed)
+    {
+        if (attackingNpc == null || plugin.getNpcStatsProvider() == null)
+        {
+            return;
+        }
+
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
+        {
+            return;
+        }
+
+        // Get NPC stats
+        var npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc.getId());
+        if (npcStats == null)
+        {
+            return;
+        }
+
+        // Get current HP
+        int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+
+        // Check if player has the CORRECT prayer active for this attack style
+        boolean hasCorrectPrayer = isPrayerActiveForStyle(attackStyleUsed);
+
+        // Calculate death probability using combat formulas
+        CombatFormulas combatFormulas = plugin.getCombatFormulas();
+        if (combatFormulas != null)
+        {
+            double deathProb = combatFormulas.calculateDeathProbability(
+                    currentHp, npcStats, attackStyleUsed, hasCorrectPrayer);
+
+            // LOWER THRESHOLD - always log if > 0.001 (0.1%) OR if HP < 30
+            if (deathProb > 0.001 || currentHp < 30)
+            {
+                // FIX THE LOGGING FORMAT (was showing {:.2f}% literally)
+                log.info(String.format("Death probability: %.2f%% (HP: %d, Style: %s, Prayer: %b)",
+                        deathProb * 100, currentHp,
+                        attackStyleUsed != null ? attackStyleUsed : "unknown", hasCorrectPrayer));
+            }
+        }
+    }
+
+    /**
+     * Check if we should track this NPC
+     */
+    private boolean shouldTrackNPC(NPC npc)
+    {
+        if (npc == null || npc.getName() == null)
+        {
+            return false;
+        }
+
+        // Use boss detection helper
+        return plugin.getBossDetectionHelper() != null &&
+                plugin.getBossDetectionHelper().isBoss(npc);
+    }
+
+    /**
+     * Check if hitsplat is player damage
+     */
+    private boolean isPlayerDamageHitsplat(Hitsplat hitsplat)
+    {
+        int type = hitsplat.getHitsplatType();
+
+        return type == HitsplatID.DAMAGE_ME ||
+                type == HitsplatID.DAMAGE_MAX_ME ||  // Max hit (bright red)
+                type == HitsplatID.BLOCK_ME ||
+                type == HitsplatID.DAMAGE_ME_CYAN ||
+                type == HitsplatID.DAMAGE_ME_ORANGE ||
+                type == HitsplatID.DAMAGE_ME_YELLOW ||
+                type == HitsplatID.DAMAGE_ME_WHITE;
     }
 
     /**
@@ -455,40 +493,5 @@ public class HitsplatListener
 
         // NO FALLBACK to random players - if we can't confirm it's local player or party member, return null
         return null;
-    }
-
-    /**
-     * Check if hitsplat is player damage
-     */
-    private boolean isPlayerDamageHitsplat(Hitsplat hitsplat)
-    {
-        int type = hitsplat.getHitsplatType();
-
-        return type == HitsplatID.DAMAGE_ME ||
-                type == HitsplatID.DAMAGE_MAX_ME ||  // Max hit (bright red)
-                type == HitsplatID.BLOCK_ME ||
-                type == HitsplatID.DAMAGE_ME_CYAN ||
-                type == HitsplatID.DAMAGE_ME_ORANGE ||
-                type == HitsplatID.DAMAGE_ME_YELLOW ||
-                type == HitsplatID.DAMAGE_ME_WHITE;
-    }
-
-    /**
-     * Check if we should track this NPC
-     */
-    private boolean shouldTrackNPC(NPC npc)
-    {
-        if (npc == null || npc.getName() == null)
-        {
-            return false;
-        }
-
-        // If tracking bosses only, check if this is a boss
-        if (plugin.getConfig().trackBossesOnly())
-        {
-            return plugin.getBossDetectionHelper().isBoss(npc);
-        }
-
-        return true;
     }
 }

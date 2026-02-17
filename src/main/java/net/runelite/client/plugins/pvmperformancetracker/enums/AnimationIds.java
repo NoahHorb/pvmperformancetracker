@@ -155,6 +155,168 @@ public class AnimationIds
             AnimationID.HUMAN_SPELLCAST_DEMONBANE // Arceuus demonbane
     );
 
+
+
+    /**
+     * Get the attack style (slash/stab/crush/ranged/magic) for a given animation
+     * This determines which specific melee style the player is using
+     */
+    public static String getAttackStyle(int animationId, int weaponId)
+    {
+        // Check if it's a magic animation
+        if (MAGE_IDS.contains(animationId))
+        {
+            return "magic";
+        }
+
+        // Check if it's a ranged animation
+        if (RANGED_IDS.contains(animationId))
+        {
+            return "ranged";
+        }
+
+        // For melee, we need to determine specific style (slash/stab/crush)
+        if (MELEE_IDS.contains(animationId))
+        {
+            return getMeleeAttackStyle(animationId, weaponId);
+        }
+
+        // Default fallback
+        return "slash";
+    }
+
+    /**
+     * Determine specific melee attack style (slash/stab/crush) based on animation and weapon
+     */
+    private static String getMeleeAttackStyle(int animationId, int weaponId)
+    {
+        switch (animationId)
+        {
+            // STAB animations
+            case AnimationID.HUMAN_SWORD_STAB:
+            case AnimationID.HUMAN_DDAGGER_LUNGE:
+            case AnimationID.HUMAN_DSPEAR_STAB:
+            case AnimationID.HUMAN_SPEAR_SPIKE:
+            case AnimationID.HUMAN_ZAMORAKSPEAR_STAB:
+            case AnimationID.BARROWS_WAR_SPEAR_STAB:
+            case AnimationID.STAB_WOLBANEDAGGER:
+            case AnimationID.ABYSSAL_DAGGER_LUNGE:
+            case AnimationID.DTTD_PLAYER_STAB_BONE_DAGGER:
+            case AnimationID.HUMAN_OSMUMTENS_FANG:
+            case AnimationID.D_CLAWS_PUNCH:
+            case AnimationID.HUMAN_DHUNTER_LANCE_ATTACK:
+            case AnimationID.HUMAN_INQUISITORS_MACE_CRUSH: // This animation name is misleading, it's actually stab
+            case AnimationID.HUMAN_STAFFORB_PUMMEL: // Hasta stab
+                return "stab";
+
+            // CRUSH animations
+            case AnimationID.HUMAN_BLUNT_POUND:
+            case AnimationID.HUMAN_BLUNT_SPIKE:
+            case AnimationID.HUMAN_STAFF_PUMMEL:
+            case AnimationID.HUMAN_SPEAR_LUNGE:
+            case AnimationID.HUMAN_ZAMORAKSPEAR_LUNGE:
+            case AnimationID.BARROWS_WAR_SPEAR_CRUSH:
+            case AnimationID.BARROW_GUTHAN_CRUSH:
+            case AnimationID.BARROW_TORAG_CRUSH:
+            case AnimationID.BARROW_DHAROK_CRUSH:
+            case AnimationID.ABYSSAL_BLUDGEON_CRUSH:
+            case AnimationID.ABYSSAL_BLUDGEON_SPECIAL_ATTACK:
+            case AnimationID.HUMAN_ELDER_MAUL_ATTACK:
+            case AnimationID.HUMAN_ELDER_MAUL_SPEC:
+            case AnimationID.SLAYER_GRANITE_MAUL_ATTACK:
+            case AnimationID.SLAYER_GRANITE_MAUL_SPECIAL_ATTACK:
+            case AnimationID.HUMAN_DHSWORD_CHOP:
+            case AnimationID.DH_SWORD_UPDATE_SMASH:
+            case AnimationID.BATTLEAXE_CRUSH:
+            case AnimationID.HUMAN_AXE_HACK:
+            case AnimationID.DRAGON_WARHAMMER_SA_PLAYER:
+            case AnimationID.BRAIN_PLAYER_ANCHOR_ATTACK:
+            case AnimationID.BRAIN_PLAYER_ANCHOR_SPECIAL_ATTACK:
+            case AnimationID.PMOON_MACUAHUITL_CRUSH:
+            case AnimationID.SHATTER:
+                return "crush";
+
+            // SLASH animations (most common default)
+            case AnimationID.HUMAN_SWORD_SLASH:
+            case AnimationID.HUMAN_DDAGGER_HACK:
+            case AnimationID.HUMAN_SCYTHE_SWEEP:
+            case AnimationID.HUMAN_ZAMORAKSPEAR_SLASH:
+            case AnimationID.BARROWS_WAR_SPEAR_SLASH:
+            case AnimationID.BARROW_DHAROK_SLASH:
+            case AnimationID.SLAYER_ABYSSAL_WHIP_ATTACK:
+            case AnimationID.ABYSSAL_DAGGER_HACK:
+            case AnimationID.SCYTHE_OF_VITUR_ATTACK:
+            case AnimationID.GHRAZI_RAPIER_ATTACK:
+            case AnimationID.HUMAN_DHUNTER_LANCE_SLASH:
+            case AnimationID.HUMAN_DHSWORD_SLASH:
+            case AnimationID.DH_SWORD_UPDATE_SLASH:
+            case AnimationID.GODWARS_GODSWORD_ZAMORAK_PLAYER:
+            case AnimationID.ANCIENT_AXE_SLASH:
+            case AnimationID.ANCIENT_AXE_CRUSH: // Soulreaper axe crush animation is actually slash
+            case AnimationID.ANCIENT_AXE_SPECIAL:
+            case AnimationID.DARK_SPEC_PLAYER:
+            case AnimationID.IVANDIS_FLAIL_ATTACK:
+            case AnimationID.CHAIR_SIT_READY_THRONE_3B:
+            case AnimationID.CLEAVE:
+                return "slash";
+
+            // Special cases - weapon-dependent
+            case AnimationID.HUMAN_AXE_CHOP:
+                // Staff bash = crush, but claws = slash
+                if (weaponId == ItemID.DRAGON_CLAWS || weaponId == ItemID.BONE_CLAWS)
+                {
+                    return "slash";
+                }
+                return "crush";
+
+            case AnimationID.DH_SWORD_UPDATE_TURNONSPOT:
+            case AnimationID.DH_SWORD_UPDATE_BLOCK:
+                // Godswords default to slash
+                return "slash";
+
+            // Specs that can vary
+            case AnimationID.WEAPON_SWORD_OSMUMTEN03_SPECIAL:
+                return "stab"; // Fang spec
+
+            case AnimationID.HUMAN_DRAGON_CLAWS_SPEC:
+            case AnimationID.HUMAN_WEAPON_BURNING_CLAWS_02_SPEC:
+                return "slash"; // Claws spec
+
+            case AnimationID.PUNCTURE:
+                return "stab"; // Dragon dagger spec
+
+            case AnimationID.ZGS_SPECIAL_PLAYER:
+            case AnimationID.ZGS_SPECIAL_ORNATE_PLAYER:
+            case AnimationID.SGS_SPECIAL_PLAYER:
+            case AnimationID.SGS_SPECIAL_ORNATE_PLAYER:
+            case AnimationID.BGS_SPECIAL_PLAYER:
+            case AnimationID.BGS_SPECIAL_ORNATE_PLAYER:
+            case AnimationID.AGS_SPECIAL_PLAYER:
+            case AnimationID.AGS_SPECIAL_ORNATE_PLAYER:
+            case AnimationID.NGS_SPECIAL_PLAYER:
+                return "slash"; // Godsword specs
+
+            case AnimationID.SARADOMIN_SWORD_SPECIAL_PLAYER:
+            case AnimationID.BLESSED_SARADOMIN_SWORD_SPECIAL_PLAYER:
+                return "slash"; // Sara sword spec
+
+            // Default to slash for unknown melee animations
+            default:
+                return "slash";
+        }
+    }
+
+    /**
+     * Check if animation is a player attack animation
+     */
+    public static boolean isPlayerAttackAnimation(int animationId)
+    {
+        return MELEE_IDS.contains(animationId) ||
+                RANGED_IDS.contains(animationId) ||
+                MAGE_IDS.contains(animationId);
+    }
+
+
     public static int getTicks(int attackAnimationId, int weaponId)
     {
         int ticks = 0;

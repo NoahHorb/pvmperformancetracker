@@ -11,6 +11,7 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.pvmperformancetracker.models.AttackStyleMapping;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -83,10 +84,10 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 	private CombatFormulas combatFormulas;
 
 	@Getter
-	private NpcAttackDatabase npcAttackDatabase;
+	private NpcAttackTracker npcAttackTracker;
 
 	@Getter
-	private NpcAttackTracker npcAttackTracker;
+	private BossVariantHelper bossVariantHelper;
 
 	// Listeners
 	private HitsplatListener hitsplatListener;
@@ -107,13 +108,11 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		weaponSpeedHelper = new WeaponSpeedHelper(client);
 		bossDetectionHelper = new BossDetectionHelper();
 		partyStatsManager = new PartyStatsManager(this, client, partyService);
-
+		bossVariantHelper = new BossVariantHelper(client);
 		// Initialize NPC stats provider (async to avoid blocking startup)
-		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR);
+		npcStatsProvider = new NpcStatsProvider(RuneLite.RUNELITE_DIR, client);
 		combatFormulas = new CombatFormulas(client, itemManager);
-		npcAttackDatabase = new NpcAttackDatabase();
 		npcAttackTracker = new NpcAttackTracker();
-
 		// Load NPC database in background
 		new Thread(() -> {
 			try {
@@ -122,6 +121,8 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 				log.error("Failed to initialize NPC stats provider", e);
 			}
 		}, "NPC-Stats-Loader").start();
+		// Initialize common boss attack mappings
+		AttackStyleMapping.initializeCommonBossMappings();
 
 		// Initialize listeners
 		hitsplatListener = new HitsplatListener(this);
@@ -216,27 +217,55 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		}
 	}
 
+//	@Subscribe
+//	public void onProjectileMoved(ProjectileMoved event)
+//	{
+//		// Track NPC projectiles for attack detection
+//		if (npcAttackTracker != null)
+//		{
+//			Projectile projectile = event.getProjectile();
+//			Actor interacting = projectile.getInteracting();
+//
+//			// Check if the projectile is targeting the local player
+//			Player localPlayer = client.getLocalPlayer();
+//			if (localPlayer != null && interacting == localPlayer)
+//			{
+//				// Find the NPC that spawned this projectile
+//				for (NPC npc : client.getNpcs())
+//				{
+//					if (npc.getInteracting() == localPlayer)
+//					{
+//						npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
+//						break;
+//					}
+//				}
+//			}
+//		}
+//	}
+
 	@Subscribe
 	public void onProjectileMoved(ProjectileMoved event)
 	{
-		// Track NPC projectiles for attack detection
-		if (npcAttackTracker != null)
+		if (!config.enableTracking() || npcAttackTracker == null)
 		{
-			Projectile projectile = event.getProjectile();
-			Actor interacting = projectile.getInteracting();
+			return;
+		}
 
-			// Check if the projectile is targeting the local player
-			Player localPlayer = client.getLocalPlayer();
-			if (localPlayer != null && interacting == localPlayer)
+		Projectile projectile = event.getProjectile();
+		Actor source = projectile.getInteracting();
+
+		// Only track projectiles from NPCs
+		if (source instanceof NPC)
+		{
+			NPC npc = (NPC) source;
+
+			// Only track if we're in a fight with this NPC
+			if (fightTracker != null && fightTracker.hasActiveFight())
 			{
-				// Find the NPC that spawned this projectile
-				for (NPC npc : client.getNpcs())
+				int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
+				if (npc.getId() == currentBossId)
 				{
-					if (npc.getInteracting() == localPlayer)
-					{
-						npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
-						break;
-					}
+					npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
 				}
 			}
 		}

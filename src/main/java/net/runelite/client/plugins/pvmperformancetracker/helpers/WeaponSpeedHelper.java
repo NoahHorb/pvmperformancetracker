@@ -2,6 +2,7 @@ package net.runelite.client.plugins.pvmperformancetracker.helpers;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.client.plugins.pvmperformancetracker.enums.AnimationIds;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -87,105 +88,84 @@ public class WeaponSpeedHelper
      */
     private int determineWeaponSpeed(String weaponName)
     {
-        // Daggers - 4 ticks
-        if (weaponName.contains("dagger") || weaponName.contains("knife"))
+        // 2-tick weapons
+        if (weaponName.contains("blowpipe") ||
+                weaponName.contains("dart") && !weaponName.contains("magic"))
+        {
+            return 2;
+        }
+
+        // 3-tick weapons
+        if (weaponName.contains("shortbow") ||
+                weaponName.contains("chinchompa") ||
+                (weaponName.contains("knife") && weaponName.contains("throwing")))
+        {
+            return 3;
+        }
+
+        // 4-tick weapons (most common)
+        if (weaponName.contains("scimitar") ||
+                weaponName.contains("whip") ||
+                weaponName.contains("rapier") ||
+                weaponName.contains("trident") ||
+                weaponName.contains("sanguinesti") ||
+                weaponName.contains("dagger"))
         {
             return 4;
         }
 
-        // Scimitars, whips - 4 ticks
-        if (weaponName.contains("scimitar") || weaponName.contains("whip"))
-        {
-            return 4;
-        }
-
-        // Rapiers, swords - 4 ticks
-        if (weaponName.contains("rapier") || weaponName.contains("sword"))
-        {
-            return 4;
-        }
-
-        // Maces, hammers - 5 ticks
-        if (weaponName.contains("mace") || weaponName.contains("hammer"))
+        // 5-tick weapons - CRITICAL: Check this BEFORE 4-tick defaults
+        if (weaponName.contains("halberd") ||        // ← FIX: Was missing!
+                weaponName.contains("scythe") ||
+                weaponName.contains("mace") ||
+                weaponName.contains("hammer") && !weaponName.contains("granite") ||
+                weaponName.contains("spear") ||
+                weaponName.contains("hasta") ||
+                weaponName.contains("crossbow") && !weaponName.contains("karil"))
         {
             return 5;
         }
 
-        // Godswords, 2h - 6 ticks
-        if (weaponName.contains("godsword") || weaponName.contains("2h"))
+        // 6-tick weapons
+        if (weaponName.contains("godsword") ||
+                weaponName.contains("2h") ||
+                weaponName.contains("ballista") ||
+                weaponName.contains("elder maul") ||
+                weaponName.contains("longbow"))
         {
             return 6;
         }
 
-        // Scythe - 5 ticks
-        if (weaponName.contains("scythe"))
+        // 7-tick weapons
+        if (weaponName.contains("granite maul") && !weaponName.contains("ornate"))
         {
+            return 7;
+        }
+
+        // Magic staves default
+        if (weaponName.contains("staff") || weaponName.contains("wand"))
+        {
+            // Harmonised nightmare staff is 4 ticks
+            if (weaponName.contains("harmonised"))
+            {
+                return 4;
+            }
             return 5;
         }
 
-        // Bows - 5 ticks (shortbow 4, longbow 6)
-        if (weaponName.contains("shortbow"))
-        {
-            return 4;
-        }
-        if (weaponName.contains("longbow"))
-        {
-            return 6;
-        }
+        // Bows default
         if (weaponName.contains("bow"))
         {
             return 5;
         }
 
-        // Crossbows - 6 ticks (rapid 5)
-        if (weaponName.contains("crossbow"))
-        {
-            return 6; // Assume accurate stance
-        }
-
-        // Blowpipe - 2 ticks
-        if (weaponName.contains("blowpipe"))
-        {
-            return 2;
-        }
-
-        // Ballista - 6 ticks
-        if (weaponName.contains("ballista"))
-        {
-            return 6;
-        }
-
-        // Darts, knives - 3 ticks
-        if (weaponName.contains("dart") || weaponName.contains("throwing"))
-        {
-            return 3;
-        }
-
-        // Chinchompas - 4 ticks
-        if (weaponName.contains("chinchompa"))
+        // Swords default
+        if (weaponName.contains("sword"))
         {
             return 4;
         }
 
-        // Magic - most spells are 5 ticks
-        if (weaponName.contains("staff") || weaponName.contains("wand"))
-        {
-            return 5;
-        }
-
-        // Trident - 4 ticks
-        if (weaponName.contains("trident") || weaponName.contains("sanguinesti"))
-        {
-            return 4;
-        }
-
-        // Harmonised nightmare staff - 4 ticks
-        if (weaponName.contains("harmonised"))
-        {
-            return 4;
-        }
-
-        // Default
+        // Default: 4 ticks
         return DEFAULT_MELEE_SPEED;
     }
 
@@ -203,36 +183,38 @@ public class WeaponSpeedHelper
     }
 
     /**
-     * Get attack speed adjusted for player's attack style
-     * Some stances modify attack speed (rapid vs accurate for ranged)
+     * Get attack speed adjusted for player's attack style and animation
+     * This is the MOST ACCURATE method - use this instead of getCurrentWeaponSpeed()
      */
-    public int getAdjustedWeaponSpeed()
+    public int getAdjustedWeaponSpeedFromAnimation(int animationId)
     {
-        int baseSpeed = getCurrentWeaponSpeed();
-
-        // Check attack style varbit
-        int attackStyleVarbit = client.getVarpValue(VarPlayer.ATTACK_STYLE);
-
-        // For ranged weapons, rapid stance reduces speed by 1
-        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
-        if (equipment != null)
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
         {
-            Item weapon = equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
-            if (weapon != null)
-            {
-                ItemComposition itemComp = client.getItemDefinition(weapon.getId());
-                String weaponName = itemComp.getName().toLowerCase();
-
-                // Check if it's a ranged weapon and rapid stance is active
-                if (isRangedWeapon(weaponName) && attackStyleVarbit == 1)
-                {
-                    return Math.max(2, baseSpeed - 1); // Rapid stance
-                }
-            }
+            return DEFAULT_MELEE_SPEED;
         }
 
-        return baseSpeed;
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        if (equipment == null)
+        {
+            return UNARMED_SPEED;
+        }
+
+        Item weapon = equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+        int weaponId = (weapon != null) ? weapon.getId() : -1;
+
+        // Use AnimationIds.getTicks() for PERFECT accuracy
+        int ticks = AnimationIds.getTicks(animationId, weaponId);
+
+        if (ticks > 0)
+        {
+            return ticks;
+        }
+
+        // Fallback to name-based detection
+        return getCurrentWeaponSpeed();
     }
+
 
     /**
      * Check if weapon is a ranged weapon

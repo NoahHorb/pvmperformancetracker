@@ -6,6 +6,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Client;
+import net.runelite.api.NPC;
 import net.runelite.client.plugins.pvmperformancetracker.models.NpcCombatStats;
 
 import java.io.*;
@@ -19,27 +21,32 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Loads and caches NPC combat stats from OSRSBox database
+ * Loads and caches NPC combat stats from custom NPC database
  */
 @Slf4j
 public class NpcStatsProvider
 {
-    private static final String OSRSBOX_MONSTERS_URL = "https://raw.githubusercontent.com/osrsbox/osrsbox-db/master/docs/monsters-complete.json";
-    private static final String CACHE_FILE_NAME = "osrsbox-monsters.json";
+    // URL to your GitHub-hosted database
+    private static final String NPC_DATABASE_URL = "https://raw.githubusercontent.com/NoahHorb/scraperwiki/refs/heads/master/npc_database.json";
+    private static final String CACHE_FILE_NAME = "npc-database.json";
+    private final Client client;
 
+    private BossVariantHelper bossVariantHelper;
     private final Gson gson;
     private final Path cacheDirectory;
     private final Map<Integer, NpcCombatStats> npcStatsCache;
+    private final Map<String, NpcCombatStats> npcStatsByKey;
     private boolean isLoaded = false;
 
-    public NpcStatsProvider(File runeLiteDirectory)
+    public NpcStatsProvider(File runeLiteDirectory, Client client)
     {
         // Use lenient Gson to handle missing/null fields
         this.gson = new GsonBuilder()
                 .setLenient()
                 .create();
         this.npcStatsCache = new HashMap<>();
-
+        this.npcStatsByKey = new HashMap<>();
+        this.client = client;
         // Cache in RuneLite's config directory
         this.cacheDirectory = Paths.get(runeLiteDirectory.getAbsolutePath(), "pvmperformancetracker");
 
@@ -58,6 +65,7 @@ public class NpcStatsProvider
      */
     public void initialize()
     {
+        this.bossVariantHelper = new BossVariantHelper(client);
         Path cacheFile = cacheDirectory.resolve(CACHE_FILE_NAME);
 
         // Check if cache exists and is recent (less than 7 days old)
@@ -86,101 +94,73 @@ public class NpcStatsProvider
         }
 
         // Download fresh data
-        log.info("Downloading OSRSBox monster database...");
         downloadDatabase(cacheFile);
     }
 
     /**
-     * Download the database from OSRSBox
+     * Download database from GitHub
      */
     private void downloadDatabase(Path cacheFile)
     {
+        log.info("Downloading NPC database from: {}", NPC_DATABASE_URL);
+
         try
         {
-            log.info("Downloading OSRSBox database from: {}", OSRSBOX_MONSTERS_URL);
-
-            URL url = new URL(OSRSBOX_MONSTERS_URL);
+            URL url = new URL(NPC_DATABASE_URL);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
-            connection.setConnectTimeout(30000);
-            connection.setReadTimeout(120000); // 2 minute timeout for large file
-            connection.setRequestProperty("User-Agent", "RuneLite-PvMTracker/1.0");
-            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
 
             int responseCode = connection.getResponseCode();
-            if (responseCode != 200)
+            if (responseCode == HttpURLConnection.HTTP_OK)
             {
-                log.error("Failed to download database: HTTP {}", responseCode);
-                return;
-            }
-
-            // Get content length (may be -1 if unknown)
-            long contentLength = connection.getContentLengthLong();
-            log.info("Downloading {} bytes...", contentLength > 0 ? contentLength : "unknown size");
-
-            // Download with larger buffer and explicit flushing
-            try (InputStream in = connection.getInputStream();
-                 BufferedInputStream bufferedIn = new BufferedInputStream(in, 65536);
-                 OutputStream out = new BufferedOutputStream(Files.newOutputStream(cacheFile), 65536))
-            {
-                byte[] buffer = new byte[65536]; // 64KB buffer
-                int bytesRead;
-                long totalBytesRead = 0;
-                int lastLoggedMB = 0;
-
-                while ((bytesRead = bufferedIn.read(buffer)) != -1)
+                // Read response
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8)))
                 {
-                    out.write(buffer, 0, bytesRead);
-                    totalBytesRead += bytesRead;
-
-                    // Log progress every MB
-                    int currentMB = (int)(totalBytesRead / 1000000);
-                    if (currentMB > lastLoggedMB)
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null)
                     {
-                        log.info("Downloaded {} MB...", currentMB);
-                        lastLoggedMB = currentMB;
+                        response.append(line).append("\n");
                     }
-                }
 
-                // Ensure everything is written
-                out.flush();
+                    // Save to cache
+                    Files.write(cacheFile, response.toString().getBytes(StandardCharsets.UTF_8));
+                    log.info("Downloaded and cached NPC database");
 
-                log.info("Successfully downloaded OSRSBox database ({} bytes, {} MB)",
-                        totalBytesRead, totalBytesRead / 1000000);
-
-                // Verify minimum size (OSRSBox DB should be at least 5MB)
-                if (totalBytesRead < 5000000)
-                {
-                    log.error("Download too small: got {} bytes, expected at least 5MB", totalBytesRead);
-                    Files.delete(cacheFile);
-                    return;
+                    // Load from cache
+                    loadFromCache(cacheFile);
                 }
             }
+            else
+            {
+                log.error("Failed to download NPC database. HTTP code: {}", responseCode);
 
-            // Load the downloaded data
-            loadFromCache(cacheFile);
+                // Try to load old cache if download failed
+                if (Files.exists(cacheFile))
+                {
+                    log.info("Falling back to existing cache");
+                    loadFromCache(cacheFile);
+                }
+            }
         }
         catch (Exception e)
         {
-            log.error("Failed to download OSRSBox database", e);
+            log.error("Failed to download NPC database", e);
 
-            // Delete partial download
-            try
+            // Try to load old cache if download failed
+            if (Files.exists(cacheFile))
             {
-                if (Files.exists(cacheFile))
-                {
-                    Files.delete(cacheFile);
-                }
-            }
-            catch (IOException deleteEx)
-            {
-                log.warn("Failed to delete partial download", deleteEx);
+                log.info("Falling back to existing cache");
+                loadFromCache(cacheFile);
             }
         }
     }
 
     /**
-     * Load database from cached file
+     * Load NPC stats from cached file
      */
     private void loadFromCache(Path cacheFile)
     {
@@ -223,46 +203,100 @@ public class NpcStatsProvider
 
             JsonObject root = jsonElement.getAsJsonObject();
 
+            // Check if there's an "npcs" wrapper object (new format)
+            JsonObject npcsObject;
+            if (root.has("npcs") && root.get("npcs").isJsonObject())
+            {
+                npcsObject = root.getAsJsonObject("npcs");
+                log.debug("Found 'npcs' wrapper in database");
+            }
+            else
+            {
+                // Fallback: treat root as the npcs object (old format compatibility)
+                npcsObject = root;
+                log.debug("No 'npcs' wrapper found, using root object");
+            }
+
             npcStatsCache.clear();
+            npcStatsByKey.clear(); // Clear the variant key cache too
             int successCount = 0;
             int failCount = 0;
 
-            // Iterate through each NPC entry
-            for (Map.Entry<String, JsonElement> entry : root.entrySet())
+            // Iterate through each NPC entry in the npcs object
+            for (Map.Entry<String, JsonElement> entry : npcsObject.entrySet())
             {
+                String entryKey = entry.getKey();
+
+                // Skip metadata entries
+                if (entryKey.equals("_metadata"))
+                {
+                    continue;
+                }
+
                 try
                 {
-                    int id = Integer.parseInt(entry.getKey());
-
                     // Try to parse the NPC stats
-                    try
+                    NpcCombatStats stats = gson.fromJson(entry.getValue(), NpcCombatStats.class);
+                    if (stats != null)
                     {
-                        NpcCombatStats stats = gson.fromJson(entry.getValue(), NpcCombatStats.class);
-                        if (stats != null)
+                        // Extract the numeric ID from the key (e.g., "8059_Post_quest_Awakened" -> 8059)
+                        // Or from the stats.id field if it's already set
+                        int numericId = extractNumericId(entryKey, stats);
+
+                        if (numericId > 0)
                         {
-                            stats.setId(id);
-                            npcStatsCache.put(id, stats);
+                            // Store by numeric ID (for fallback when variant not found)
+                            npcStatsCache.put(numericId, stats);
+
+                            // ALSO store by full variant key (e.g., "12223_Awakened")
+                            npcStatsByKey.put(entryKey, stats);
+
                             successCount++;
+
+                            log.debug("Loaded NPC: {} (numeric ID: {})", entryKey, numericId);
+
+                            // If the ID field contains multiple IDs (comma-separated), cache for all
+                            if (stats.getId() != null && stats.getId().contains(","))
+                            {
+                                String[] ids = stats.getId().split(",");
+                                for (String idStr : ids)
+                                {
+                                    try
+                                    {
+                                        int additionalId = Integer.parseInt(idStr.trim());
+                                        if (additionalId != numericId) // Don't duplicate the primary ID
+                                        {
+                                            npcStatsCache.put(additionalId, stats);
+                                            log.debug("Added alternate ID {} for {}", additionalId, stats.getName());
+                                        }
+                                    }
+                                    catch (NumberFormatException nfe)
+                                    {
+                                        log.debug("Skipping invalid alternate ID: {}", idStr);
+                                    }
+                                }
+                            }
                         }
-                    }
-                    catch (Exception parseEx)
-                    {
-                        // Skip this NPC if it can't be parsed
-                        failCount++;
-                        if (failCount <= 10) // Log first 10 failures for debugging
+                        else
                         {
-                            log.debug("Failed to parse NPC {}: {}", id, parseEx.getMessage());
+                            log.debug("Could not extract numeric ID from key: {}", entryKey);
+                            failCount++;
                         }
                     }
                 }
-                catch (NumberFormatException e)
+                catch (Exception parseEx)
                 {
-                    log.warn("Invalid NPC ID: {}", entry.getKey());
+                    // Skip this NPC if it can't be parsed
+                    failCount++;
+                    if (failCount <= 10) // Log first 10 failures for debugging
+                    {
+                        log.debug("Failed to parse NPC {}: {}", entryKey, parseEx.getMessage());
+                    }
                 }
             }
 
             isLoaded = true;
-            log.info("Loaded {} NPC entries from OSRSBox database ({} failed to parse)", successCount, failCount);
+            log.info("Loaded {} NPC entries from database ({} failed to parse)", successCount, failCount);
         }
         catch (Exception e)
         {
@@ -271,7 +305,96 @@ public class NpcStatsProvider
     }
 
     /**
-     * Get NPC combat stats by ID
+     * Extract numeric NPC ID from the entry key or stats object
+     * Key format examples: "8059_Post_quest_Awakened", "2042_Serpentine_"
+     *
+     * @param entryKey The JSON key (e.g., "8059_Post_quest_Awakened")
+     * @param stats The parsed NPC stats object
+     * @return Numeric ID, or -1 if not found
+     */
+    private int extractNumericId(String entryKey, NpcCombatStats stats)
+    {
+        // First try: Parse the ID from the key (format: "ID_Version_Phase")
+        if (entryKey != null && entryKey.contains("_"))
+        {
+            String idPart = entryKey.split("_")[0];
+            try
+            {
+                return Integer.parseInt(idPart);
+            }
+            catch (NumberFormatException e)
+            {
+                // Fall through to next method
+            }
+        }
+
+        // Second try: Get the first ID from the stats.id field
+        if (stats.getId() != null)
+        {
+            // Handle comma-separated IDs (e.g., "8059,8061")
+            String idStr = stats.getId().contains(",")
+                    ? stats.getId().split(",")[0].trim()
+                    : stats.getId();
+
+            try
+            {
+                return Integer.parseInt(idStr);
+            }
+            catch (NumberFormatException e)
+            {
+                log.debug("Could not parse ID from stats: {}", stats.getId());
+            }
+        }
+
+        // Could not extract ID
+        return -1;
+    }
+
+    /**
+     * Get NPC combat stats by NPC object (variant-aware)
+     * This is the primary method that should be used
+     */
+    public NpcCombatStats getNpcStats(NPC npc)
+    {
+        if (!isLoaded || npc == null)
+        {
+            log.warn("NPC stats provider not loaded yet or NPC is null");
+            return null;
+        }
+
+        // Get variant-specific key using BossVariantHelper
+        String variantKey = bossVariantHelper != null ?
+                bossVariantHelper.getNpcDatabaseKey(npc) :
+                String.valueOf(npc.getId());
+
+        // Try variant-specific lookup first
+        NpcCombatStats stats = npcStatsByKey.get(variantKey);
+
+        if (stats != null)
+        {
+            log.debug("Found variant-specific stats for: {}", variantKey);
+            return stats;
+        }
+
+        // Fallback to numeric ID lookup
+        int npcId = npc.getId();
+        stats = npcStatsCache.get(npcId);
+
+        if (stats != null)
+        {
+            log.debug("Using base stats for NPC ID: {} (no variant found for {})", npcId, variantKey);
+        }
+        else
+        {
+            log.debug("No stats found for NPC ID: {}, variant: {}", npcId, variantKey);
+        }
+
+        return stats;
+    }
+
+    /**
+     * Get NPC combat stats by ID (fallback method)
+     * Use getNpcStats(NPC) instead when possible for variant support
      */
     public NpcCombatStats getNpcStats(int npcId)
     {

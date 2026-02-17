@@ -124,6 +124,7 @@ public class PlayerStats
      */
     public void addDamageTaken(int damage, int tick, DamageType damageType)
     {
+        this.damageTaken += damage;
         switch (damageType)
         {
             case AVOIDABLE:

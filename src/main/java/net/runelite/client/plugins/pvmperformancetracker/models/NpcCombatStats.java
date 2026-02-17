@@ -3,119 +3,235 @@ package net.runelite.client.plugins.pvmperformancetracker.models;
 import com.google.gson.annotations.SerializedName;
 import lombok.Data;
 
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * NPC combat stats from OSRSBox database
- * Schema: https://www.osrsbox.com/projects/osrsbox-db/
+ * NPC combat stats from custom NPC database
+ * Supports NPCs with multiple attack styles and varying max/min hits
  */
 @Data
 public class NpcCombatStats
 {
-    private int id;
     private String name;
 
-    // Combat stats
+    @SerializedName("baseName")
+    private String baseName;
+
+    private String phase;
+    private String version;
+    private String id; // Can be comma-separated list like "8059,8061"
+
+    @SerializedName("combatLevel")
+    private Integer combatLevel;
+
     @SerializedName("hitpoints")
     private Integer hitpoints;
 
-    @SerializedName("attack_level")
+    private Integer size;
+
+    // Max and min hits per attack style
+    @SerializedName("maxHit")
+    private Map<String, Integer> maxHit;
+
+    @SerializedName("minHit")
+    private Map<String, Integer> minHit;
+
+    @SerializedName("attackSpeed")
+    private Integer attackSpeed;
+
+    @SerializedName("attackStyle")
+    private String attackStyle; // e.g., "[[Slash]], [[Magic]], [[Ranged]]"
+
+    private Boolean aggressive;
+    private Boolean poisonous;
+    private String[] attributes;
+
+    private Map<String, Boolean> immunities;
+
+    // Combat levels
+    @SerializedName("attackLevel")
     private Integer attackLevel;
 
-    @SerializedName("strength_level")
+    @SerializedName("strengthLevel")
     private Integer strengthLevel;
 
-    @SerializedName("defence_level")
+    @SerializedName("defenceLevel")
     private Integer defenceLevel;
 
-    @SerializedName("magic_level")
+    @SerializedName("magicLevel")
     private Integer magicLevel;
 
-    @SerializedName("ranged_level")
+    @SerializedName("rangedLevel")
     private Integer rangedLevel;
 
     // Attack bonuses
-    @SerializedName("attack_stab")
-    private Integer attackStab;
+    @SerializedName("attackBonus")
+    private Integer attackBonus; // Generic melee attack bonus
 
-    @SerializedName("attack_slash")
-    private Integer attackSlash;
+    @SerializedName("strengthBonus")
+    private Integer strengthBonus;
 
-    @SerializedName("attack_crush")
-    private Integer attackCrush;
+    @SerializedName("rangedAttackBonus")
+    private Integer rangedAttackBonus;
 
-    @SerializedName("attack_magic")
-    private Integer attackMagic;
+    @SerializedName("rangedStrengthBonus")
+    private Integer rangedStrengthBonus;
 
-    @SerializedName("attack_ranged")
-    private Integer attackRanged;
+    @SerializedName("magicAttackBonus")
+    private Integer magicAttackBonus;
+
+    @SerializedName("magicStrengthBonus")
+    private Integer magicStrengthBonus;
 
     // Defence bonuses
-    @SerializedName("defence_stab")
-    private Integer defenceStab;
+    @SerializedName("stabDefence")
+    private Integer stabDefence;
 
-    @SerializedName("defence_slash")
-    private Integer defenceSlash;
+    @SerializedName("slashDefence")
+    private Integer slashDefence;
 
-    @SerializedName("defence_crush")
-    private Integer defenceCrush;
+    @SerializedName("crushDefence")
+    private Integer crushDefence;
 
-    @SerializedName("defence_magic")
-    private Integer defenceMagic;
+    @SerializedName("magicDefence")
+    private Integer magicDefence;
 
-    @SerializedName("defence_ranged")
-    private Integer defenceRanged;
+    @SerializedName("rangedDefence")
+    private Integer rangedDefence;
 
-    // Other bonuses
-    @SerializedName("attack_accuracy")
-    private Integer attackAccuracy;
+    // Special ammo defences (optional)
+    @SerializedName("lightAmmoDefence")
+    private Integer lightAmmoDefence;
 
-    @SerializedName("melee_strength")
-    private Integer meleeStrength;
+    @SerializedName("standardAmmoDefence")
+    private Integer standardAmmoDefence;
 
-    @SerializedName("ranged_strength")
-    private Integer rangedStrength;
+    @SerializedName("heavyAmmoDefence")
+    private Integer heavyAmmoDefence;
 
-    @SerializedName("magic_damage")
-    private Integer magicDamage;
+    // Elemental weakness (optional)
+    @SerializedName("elementalWeakness")
+    private ElementalWeakness elementalWeakness;
 
-    // Max hit
-    @SerializedName("max_hit")
-    private Integer maxHit;
-
-    // Attack type
-    @SerializedName("attack_type")
-    private List<String> attackType; // ["melee", "magic", "ranged"]
-
-    // Aggressive status
-    @SerializedName("aggressive")
-    private Boolean aggressive;
-
-    // Slayer properties
-    @SerializedName("slayer_level")
+    @SerializedName("slayerLevel")
     private Integer slayerLevel;
 
-    @SerializedName("slayer_xp")
+    @SerializedName("slayerXp")
     private Integer slayerXp;
 
+    @SerializedName("wikiPage")
+    private String wikiPage;
+
+    private String examine;
+
     /**
-     * Get primary attack type
+     * Get max hit for a specific attack style
+     * Returns 0 if not found
      */
-    public String getPrimaryAttackType()
+    public int getMaxHitForStyle(String style)
     {
-        if (attackType == null || attackType.isEmpty())
+        if (maxHit == null || style == null)
         {
-            return "melee"; // Default
+            return 0;
         }
-        return attackType.get(0);
+
+        String normalizedStyle = normalizeAttackStyle(style);
+        return maxHit.getOrDefault(normalizedStyle, 0);
     }
 
     /**
-     * Check if NPC uses multiple attack styles
+     * Get min hit for a specific attack style
+     * Returns 0 if not found
+     */
+    public int getMinHitForStyle(String style)
+    {
+        if (minHit == null || style == null)
+        {
+            return 0;
+        }
+
+        String normalizedStyle = normalizeAttackStyle(style);
+        return minHit.getOrDefault(normalizedStyle, 0);
+    }
+
+    /**
+     * Get the highest max hit across all attack styles
+     */
+    public int getHighestMaxHit()
+    {
+        if (maxHit == null || maxHit.isEmpty())
+        {
+            return 0;
+        }
+
+        return maxHit.values().stream()
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(0);
+    }
+
+    /**
+     * Get all available attack styles from maxHit map
+     */
+    public String[] getAvailableAttackStyles()
+    {
+        if (maxHit == null || maxHit.isEmpty())
+        {
+            return new String[0];
+        }
+
+        return maxHit.keySet().toArray(new String[0]);
+    }
+
+    /**
+     * Check if NPC has multiple attack styles
      */
     public boolean hasMultipleAttackStyles()
     {
-        return attackType != null && attackType.size() > 1;
+        return maxHit != null && maxHit.size() > 1;
+    }
+
+    /**
+     * Get primary attack style (first one, or fallback priority)
+     * Priority: melee > magic > ranged > other
+     */
+    public String getPrimaryAttackStyle()
+    {
+        if (maxHit == null || maxHit.isEmpty())
+        {
+            return "melee";
+        }
+
+        // Check for standard combat styles in priority order
+        if (maxHit.containsKey("melee") || maxHit.containsKey("slash") ||
+                maxHit.containsKey("stab") || maxHit.containsKey("crush"))
+        {
+            // Return the first melee variant found
+            if (maxHit.containsKey("slash")) return "slash";
+            if (maxHit.containsKey("stab")) return "stab";
+            if (maxHit.containsKey("crush")) return "crush";
+            if (maxHit.containsKey("melee")) return "melee";
+        }
+
+        if (maxHit.containsKey("magic")) return "magic";
+        if (maxHit.containsKey("ranged")) return "ranged";
+
+        // Return first available style as fallback
+        return maxHit.keySet().iterator().next();
+    }
+
+    /**
+     * Normalize attack style string for consistent lookups
+     */
+    private String normalizeAttackStyle(String style)
+    {
+        if (style == null)
+        {
+            return "melee";
+        }
+
+        return style.toLowerCase().trim();
     }
 
     /**
@@ -128,18 +244,21 @@ public class NpcCombatStats
             return 0;
         }
 
-        switch (style.toLowerCase())
+        String normalized = normalizeAttackStyle(style);
+
+        switch (normalized)
         {
             case "stab":
-                return defenceStab != null ? defenceStab : 0;
+                return stabDefence != null ? stabDefence : 0;
             case "slash":
-                return defenceSlash != null ? defenceSlash : 0;
+                return slashDefence != null ? slashDefence : 0;
             case "crush":
-                return defenceCrush != null ? defenceCrush : 0;
+            case "melee":
+                return crushDefence != null ? crushDefence : 0;
             case "magic":
-                return defenceMagic != null ? defenceMagic : 0;
+                return magicDefence != null ? magicDefence : 0;
             case "ranged":
-                return defenceRanged != null ? defenceRanged : 0;
+                return rangedDefence != null ? rangedDefence : 0;
             default:
                 return 0;
         }
@@ -155,20 +274,77 @@ public class NpcCombatStats
             return 0;
         }
 
-        switch (style.toLowerCase())
+        String normalized = normalizeAttackStyle(style);
+
+        switch (normalized)
         {
             case "stab":
-                return attackStab != null ? attackStab : 0;
             case "slash":
-                return attackSlash != null ? attackSlash : 0;
             case "crush":
-                return attackCrush != null ? attackCrush : 0;
+            case "melee":
+                return attackBonus != null ? attackBonus : 0;
             case "magic":
-                return attackMagic != null ? attackMagic : 0;
+                return magicAttackBonus != null ? magicAttackBonus : 0;
             case "ranged":
-                return attackRanged != null ? attackRanged : 0;
+                return rangedAttackBonus != null ? rangedAttackBonus : 0;
             default:
                 return 0;
+        }
+    }
+
+    /**
+     * Get strength bonus for given attack style
+     */
+    public int getStrengthBonus(String style)
+    {
+        if (style == null)
+        {
+            return 0;
+        }
+
+        String normalized = normalizeAttackStyle(style);
+
+        switch (normalized)
+        {
+            case "stab":
+            case "slash":
+            case "crush":
+            case "melee":
+                return strengthBonus != null ? strengthBonus : 0;
+            case "magic":
+                return magicStrengthBonus != null ? magicStrengthBonus : 0;
+            case "ranged":
+                return rangedStrengthBonus != null ? rangedStrengthBonus : 0;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get attack level for given attack style
+     */
+    public int getAttackLevelForStyle(String style)
+    {
+        if (style == null)
+        {
+            return attackLevel != null ? attackLevel : 1;
+        }
+
+        String normalized = normalizeAttackStyle(style);
+
+        switch (normalized)
+        {
+            case "stab":
+            case "slash":
+            case "crush":
+            case "melee":
+                return attackLevel != null ? attackLevel : 1;
+            case "magic":
+                return magicLevel != null ? magicLevel : 1;
+            case "ranged":
+                return rangedLevel != null ? rangedLevel : 1;
+            default:
+                return attackLevel != null ? attackLevel : 1;
         }
     }
 
@@ -194,5 +370,15 @@ public class NpcCombatStats
     public int getStrengthLevelOrDefault()
     {
         return strengthLevel != null ? strengthLevel : 1;
+    }
+
+    /**
+     * Inner class for elemental weakness
+     */
+    @Data
+    public static class ElementalWeakness
+    {
+        private String type;
+        private Integer percent;
     }
 }

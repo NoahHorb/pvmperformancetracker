@@ -48,6 +48,7 @@ public class FightTracker
         // End current fight if one exists
         if (currentFight != null && currentFight.isActive())
         {
+            log.warn("Starting new fight while one is active!");
             endCurrentFight();
         }
 

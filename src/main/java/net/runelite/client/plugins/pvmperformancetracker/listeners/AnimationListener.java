@@ -1,11 +1,10 @@
 package net.runelite.client.plugins.pvmperformancetracker.listeners;
 
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.Player;
+import net.runelite.api.*;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
+import net.runelite.client.plugins.pvmperformancetracker.enums.AnimationIds;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.WeaponSpeedHelper;
 import net.runelite.client.plugins.pvmperformancetracker.party.PartyStatsManager;
@@ -75,14 +74,23 @@ public class AnimationListener
 
         Actor actor = event.getActor();
 
-        // Only track player animations
-        if (!(actor instanceof Player))
+        // Track player animations
+        if (actor instanceof Player)
         {
-            return;
+            handlePlayerAnimation((Player) actor);
         }
+        // Track NPC animations
+        else if (actor instanceof NPC)
+        {
+            handleNpcAnimation((NPC) actor);
+        }
+    }
 
-        Player player = (Player) actor;
-
+    /**
+     * Handle player animation changes
+     */
+    private void handlePlayerAnimation(Player player)
+    {
         // CRITICAL: Only track local player OR party members
         if (!isPartyMemberOrLocal(player))
         {
@@ -95,6 +103,36 @@ public class AnimationListener
         if (isAttackAnimation(animationId))
         {
             handleAttackAnimation(player, animationId);
+        }
+    }
+
+    /**
+     * Handle NPC animation changes
+     * Tracks NPC attack animations to determine attack style
+     */
+    private void handleNpcAnimation(NPC npc)
+    {
+        FightTracker fightTracker = plugin.getFightTracker();
+
+        // Only track if there's an active fight
+        if (fightTracker == null || !fightTracker.hasActiveFight())
+        {
+            return;
+        }
+
+        // Only track the boss we're fighting
+        int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
+        if (npc.getId() != currentBossId)
+        {
+            return;
+        }
+
+        int animationId = npc.getAnimation();
+
+        // Record the NPC animation in the attack tracker
+        if (plugin.getNpcAttackTracker() != null && animationId != -1)
+        {
+            plugin.getNpcAttackTracker().recordNpcAnimation(npc, animationId);
         }
     }
 
@@ -142,18 +180,42 @@ public class AnimationListener
             return;
         }
 
-        // Get weapon speed
+        // Get weapon speed using the animation ID for PERFECT accuracy
         int weaponSpeed;
         if (player.equals(client.getLocalPlayer()))
         {
-            // For local player, we can accurately get weapon speed
-            WeaponSpeedHelper weaponHelper = plugin.getWeaponSpeedHelper();
-            weaponSpeed = weaponHelper != null ? weaponHelper.getAdjustedWeaponSpeed() : 4;
+            // For local player, use AnimationIds.getTicks() with actual weapon ID
+            ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+            int weaponId = -1;
+
+            if (equipment != null)
+            {
+                Item weapon = equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+                if (weapon != null)
+                {
+                    weaponId = weapon.getId();
+                }
+            }
+
+            // Get EXACT ticks from AnimationIds
+            weaponSpeed = AnimationIds.getTicks(animationId, weaponId);
+
+            // Fallback if getTicks returns 0 (unknown animation)
+            if (weaponSpeed == 0)
+            {
+                WeaponSpeedHelper weaponHelper = plugin.getWeaponSpeedHelper();
+                weaponSpeed = weaponHelper != null ? weaponHelper.getCurrentWeaponSpeed() : 4;
+            }
         }
         else
         {
-            // For party members, estimate based on animation
-            weaponSpeed = estimateWeaponSpeedFromAnimation(animationId);
+            // For party members, estimate based on animation alone (weaponId unknown)
+            weaponSpeed = AnimationIds.getTicks(animationId, -1);
+
+            if (weaponSpeed == 0)
+            {
+                weaponSpeed = estimateWeaponSpeedFromAnimation(animationId);
+            }
         }
 
         // Record the attack
@@ -212,62 +274,72 @@ public class AnimationListener
     }
 
     /**
-     * Determine attack style from animation ID
+     * Determine attack style from animation ID and weapon ID
+     * Uses AnimationIds class for accurate detection
      */
     private String determineAttackStyle(int animationId)
     {
-        // Magic animations
-        if (animationId == 1162 || animationId == 1167 || animationId == 1978 ||
-                animationId == 8532 || animationId == 7855 || animationId == 9493)
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
         {
-            return "magic";
+            return "slash";
         }
 
-        // Ranged animations
-        if (animationId == 426 || animationId == 5061 || animationId == 7617 ||
-                animationId == 7552 || animationId == 8291 || animationId == 929 ||
-                animationId == 7554 || animationId == 7555)
+        // Get equipped weapon ID
+        ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+        int weaponId = -1;
+
+        if (equipment != null)
         {
-            return "ranged";
+            Item weapon = equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+            if (weapon != null)
+            {
+                weaponId = weapon.getId();
+            }
         }
 
-        // Default to melee (could be more specific with stab/slash/crush)
-        return "slash"; // Most common melee style
+        // Use AnimationIds to get the attack style
+        return AnimationIds.getAttackStyle(animationId, weaponId);
     }
+
 
     /**
      * Estimate weapon speed from animation ID for party members
      */
     private int estimateWeaponSpeedFromAnimation(int animationId)
     {
-        // Blowpipe and similar fast weapons
-        if (animationId == 5061) return 2;
+        // Blowpipe and darts
+        if (animationId == 5061)
+        {
+            return 2;
+        }
 
-        // Scythes
-        if (animationId == 4230 || animationId == 8056) return 5;
+        // Shortbow, chinchompas
+        if (animationId == 426 || animationId == 7618)
+        {
+            return 3;
+        }
+
+        // Most weapons
+        if (animationId == 401 || animationId == 1658 || animationId == 7514 ||
+                animationId == 8145 || animationId == 1162 || animationId == 1167)
+        {
+            return 4;
+        }
+
+        // Slower weapons (crossbows, etc.)
+        if (animationId == 7617)
+        {
+            return 5;
+        }
 
         // Godswords and 2h weapons
-        if (animationId == 7514 || animationId == 386) return 6;
+        if (animationId == 7514 || animationId == 386)
+        {
+            return 6;
+        }
 
-        // Whip, scimitars, most 1h melee
-        if (animationId == 1658 || animationId == 1378 || animationId == 401) return 4;
-
-        // Crossbows
-        if (animationId == 7617) return 6;
-
-        // Ballistas
-        if (animationId == 7552 || animationId == 7554 || animationId == 7555) return 7;
-
-        // Bows
-        if (animationId == 426 || animationId == 929 || animationId == 8291) return 5;
-
-        // Magic - most spells
-        if (animationId == 1162 || animationId == 1167 || animationId == 1978) return 5;
-
-        // Trident and powered staves
-        if (animationId == 8532 || animationId == 7855 || animationId == 9493) return 4;
-
-        // Default: assume 4 tick weapon
+        // Default
         return 4;
     }
 }
