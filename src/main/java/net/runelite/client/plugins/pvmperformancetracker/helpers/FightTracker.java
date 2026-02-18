@@ -56,10 +56,20 @@ public class FightTracker
         currentFight.setBossName(bossName);
         currentFight.setBossNpcId(bossNpcId);
 
-        String localPlayerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Unknown";
+        String localPlayerName = client.getLocalPlayer() != null
+                ? client.getLocalPlayer().getName()
+                : "Unknown";
         currentFight.setLocalPlayerName(localPlayerName);
 
         log.debug("Started new fight: {} ({})", bossName, bossNpcId);
+
+        // Clear NpcAttackTracker so previous fight's scheduled hits / mechanics
+        // don't carry over to the new fight
+        if (plugin.getNpcAttackTracker() != null)
+        {
+            plugin.getNpcAttackTracker().clear();
+            log.debug("Cleared NpcAttackTracker for new fight");
+        }
 
         // Initialize Overall if it doesn't exist
         if (overallFight == null || !overallFight.isActive())

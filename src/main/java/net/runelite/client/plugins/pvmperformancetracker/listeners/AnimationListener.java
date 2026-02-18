@@ -128,8 +128,8 @@ public class AnimationListener
     }
 
     /**
-     * Handle NPC animation changes
-     * Tracks NPC attack animations to determine attack style (for multi-style bosses)
+     * Handle NPC animation changes.
+     * Routes to NpcAttackTracker which handles both direct attacks and mechanics.
      */
     private void handleNpcAnimation(NPC npc)
     {
@@ -149,10 +149,15 @@ public class AnimationListener
         }
 
         int animationId = npc.getAnimation();
-
-        // Record the NPC animation in the attack tracker
-        if (plugin.getNpcAttackTracker() != null && animationId != -1)
+        if (animationId == -1)
         {
+            return;
+        }
+
+        if (plugin.getNpcAttackTracker() != null)
+        {
+            log.debug("[AnimationListener] NPC animation: npc={} (id={} index={}) anim={}",
+                    npc.getName(), npc.getId(), npc.getIndex(), animationId);
             plugin.getNpcAttackTracker().recordNpcAnimation(npc, animationId);
         }
     }

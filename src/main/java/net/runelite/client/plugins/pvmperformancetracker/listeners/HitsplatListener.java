@@ -134,7 +134,12 @@ public class HitsplatListener
         }
     }
     /**
-     * Handle damage taken by player from NPCs
+     * Handle damage taken by the local player.
+     *
+     * First filters to only tracked hitsplat types (DAMAGE_ME, BLOCK_ME, etc.),
+     * then routes:
+     *   - Known DoT types → recorded as UNAVOIDABLE, tracker skipped
+     *   - Everything else → direct NPC attack, resolved through NpcAttackTracker
      */
     private void handleDamageToPlayer(Hitsplat hitsplat)
     {
@@ -156,88 +161,138 @@ public class HitsplatListener
             return;
         }
 
-        int damage = hitsplat.getAmount();
-        int currentTick = client.getTickCount();
-
-        // Find the NPC that dealt this damage
-        NPC attackingNpc = findAttackingNpc(currentFight.getBossNpcId());
-
-        if (attackingNpc == null)
+        String playerName = localPlayer.getName();
+        if (playerName == null)
         {
-            log.debug("Could not determine attacking NPC");
             return;
         }
 
-        // Get NPC stats using the NPC OBJECT for variant detection
+        PlayerStats stats = currentFight.getPlayerStats().get(playerName);
+        if (stats == null)
+        {
+            return;
+        }
+
+        // Only process hitsplat types we track (DAMAGE_ME, BLOCK_ME, coloured variants)
+        // This is the same filter used in handleDamageToNPC — it covers both
+        // the player's outgoing hits AND incoming hits from NPCs.
+        if (!isPlayerDamageHitsplat(hitsplat))
+        {
+            log.debug("[HitsplatListener] Skipping untracked incoming hitsplat type={}",
+                    hitsplat.getHitsplatType());
+            return;
+        }
+
+        int hitsplatType = hitsplat.getHitsplatType();
+        int damage       = hitsplat.getAmount();
+        int currentTick  = client.getTickCount();
+
+        log.debug("[HitsplatListener] Incoming player hitsplat: type={} damage={} tick={}",
+                hitsplatType, damage, currentTick);
+
+        // ---- DoT / environmental damage — bypass tracker ----
+        // Poison, venom, burn, bleed, disease are not tied to NPC attack animations.
+        // Sending them to NpcAttackTracker would incorrectly consume a scheduled
+        // direct-hit slot or be misattributed to an active mechanic.
+        if (isEnvironmentalOrDoTHitsplat(hitsplatType))
+        {
+            log.debug("[HitsplatListener] DoT/environmental hit (type={} damage={}) — UNAVOIDABLE, skipping tracker",
+                    hitsplatType, damage);
+
+            stats.addDamageTaken(damage, currentTick, DamageType.UNAVOIDABLE);
+
+            // If this tick's damage meets or exceeds current HP it was a guaranteed kill
+            int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+            if (damage >= currentHp)
+            {
+                stats.addDeathChance(1.0);
+                log.debug("[HitsplatListener] DoT hit is lethal ({} dmg >= {} HP) — 100% death chance recorded",
+                        damage, currentHp);
+            }
+            return;
+        }
+
+        // ---- Direct NPC attack — resolve style through tracker ----
+        log.debug("[HitsplatListener] Direct NPC attack: type={} damage={} tick={}",
+                hitsplatType, damage, currentTick);
+
+        NPC attackingNpc = findAttackingNpc(currentFight.getBossNpcId());
+        if (attackingNpc == null)
+        {
+            log.debug("[HitsplatListener] Could not find attacking NPC for bossId={}",
+                    currentFight.getBossNpcId());
+            return;
+        }
+
+        // Variant-aware stat lookup
         NpcCombatStats npcStats = null;
         if (plugin.getNpcStatsProvider() != null && plugin.getNpcStatsProvider().isLoaded())
         {
-            npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc);  // ← USE NPC OBJECT
+            npcStats = plugin.getNpcStatsProvider().getNpcStats(attackingNpc);
         }
 
-        // Determine attack style used
+        // Determine attack style
         String attackStyleUsed = null;
-
         if (npcStats != null)
         {
-            // Check if NPC has multiple attack styles
-            if (npcStats.hasMultipleAttackStyles())
+            if (npcStats.hasMultipleAttackStyles() && plugin.getNpcAttackTracker() != null)
             {
-                // NPC has multiple styles - track animations/projectiles
-                if (plugin.getNpcAttackTracker() != null)
-                {
-                    int npcIndex = attackingNpc.getIndex();
-                    attackStyleUsed = plugin.getNpcAttackTracker().getBestKnownAttackStyle(npcIndex);
+                int npcIndex = attackingNpc.getIndex();
+                plugin.getNpcAttackTracker().logCurrentState(npcIndex);
+                attackStyleUsed = plugin.getNpcAttackTracker().resolveIncomingHit(npcIndex);
 
-                    // Confirm this attack style
-                    if (attackStyleUsed != null)
-                    {
-                        plugin.getNpcAttackTracker().confirmAttackStyle(npcIndex, attackStyleUsed);
-                    }
-                }
-
-                // Fallback to primary if not tracked yet
                 if (attackStyleUsed == null)
                 {
                     attackStyleUsed = npcStats.getPrimaryAttackStyle();
-                    log.debug("No tracked style yet, using primary: {}", attackStyleUsed);
+                    log.debug("[HitsplatListener] Tracker returned null — falling back to primary: {}",
+                            attackStyleUsed);
                 }
             }
             else
             {
-                // NPC has single attack style - use it directly
                 attackStyleUsed = npcStats.getPrimaryAttackStyle();
             }
         }
 
-        // Classify the damage type
+        log.debug("[HitsplatListener] Resolved: damage={} style={} tick={} npc={}",
+                damage, attackStyleUsed, currentTick, attackingNpc.getName());
+
+        // Classify, record, and calculate death probability
         DamageType damageType = classifyDamage(attackingNpc, damage, attackStyleUsed, npcStats);
+        stats.addDamageTaken(damage, currentTick, damageType);
 
-        // Record damage taken
-        String playerName = localPlayer.getName();
-        PlayerStats stats = currentFight.getPlayerStats().get(playerName);
-        if (playerName != null)
-        {
-            if (stats != null)
-            {
-                stats.addDamageTaken(damage, currentTick, damageType);
-            }
-        }
+        log.debug("[HitsplatListener] Player took {} damage (type={} style={} tick={})",
+                damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown", currentTick);
 
-        log.debug("Player took {} damage (type: {}, style: {})",
-                damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown");
-
-        // Calculate death probability if we have NPC stats
         if (npcStats != null && attackStyleUsed != null)
         {
             double deathProbability = calculateDeathProbability(attackingNpc, attackStyleUsed, npcStats);
             if (deathProbability > 0.0)
             {
                 stats.addDeathChance(deathProbability);
-                log.debug("Death probability: {}% at (rolled {})",
+                log.debug("[HitsplatListener] Death probability: {}% (rolled {})",
                         String.format("%.1f", deathProbability * 100), damage);
             }
         }
+    }
+
+    /**
+     * Returns true for hitsplat types that are known environmental/DoT sources.
+
+     * We also include the RuneLite named constants for poison/venom/disease/bleed
+     * since those are stable and well-known. If a constant resolves to the same
+     * integer as a named constant, Java de-duplicates them automatically.
+     *
+     * If you encounter a new DoT type showing as "Treating as direct NPC attack"
+     * in the logs, add its type integer here.
+     */
+    private boolean isEnvironmentalOrDoTHitsplat(int type)
+    {
+        return type == HitsplatID.POISON
+                || type == HitsplatID.VENOM
+                || type == HitsplatID.DISEASE
+                || type == HitsplatID.BURN
+                || type == HitsplatID.BLEED;
     }
 
     /**
@@ -389,7 +444,7 @@ public class HitsplatListener
     }
 
     /**
-     * Check if hitsplat is player damage
+     * Check if hitsplat is player damage -> these are incoming or outgoing
      */
     private boolean isPlayerDamageHitsplat(Hitsplat hitsplat)
     {

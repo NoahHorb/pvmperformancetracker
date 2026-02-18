@@ -177,6 +177,12 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 				panel.updatePanel();
 			}
 		}
+
+		// Advance NpcAttackTracker clock so stale entries are expired
+		if (npcAttackTracker != null)
+		{
+			npcAttackTracker.onGameTick(client.getTickCount());
+		}
 	}
 
 	@Subscribe
@@ -195,44 +201,10 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		{
 			animationListener.onAnimationChanged(event);
 		}
-
-		// Track NPC animations for attack detection
-		if (npcAttackTracker != null && event.getActor() instanceof NPC)
-		{
-			NPC npc = (NPC) event.getActor();
-			int animationId = npc.getAnimation();
-			if (animationId != -1)
-			{
-				npcAttackTracker.recordNpcAnimation(npc, animationId);
-			}
-		}
+		// NOTE: NPC animation recording is handled inside AnimationListener.handleNpcAnimation
+		// which calls npcAttackTracker.recordNpcAnimation. The duplicate call that used to
+		// live here has been removed to avoid double-recording animations.
 	}
-
-//	@Subscribe
-//	public void onProjectileMoved(ProjectileMoved event)
-//	{
-//		// Track NPC projectiles for attack detection
-//		if (npcAttackTracker != null)
-//		{
-//			Projectile projectile = event.getProjectile();
-//			Actor interacting = projectile.getInteracting();
-//
-//			// Check if the projectile is targeting the local player
-//			Player localPlayer = client.getLocalPlayer();
-//			if (localPlayer != null && interacting == localPlayer)
-//			{
-//				// Find the NPC that spawned this projectile
-//				for (NPC npc : client.getNpcs())
-//				{
-//					if (npc.getInteracting() == localPlayer)
-//					{
-//						npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
-//						break;
-//					}
-//				}
-//			}
-//		}
-//	}
 
 	@Subscribe
 	public void onProjectileMoved(ProjectileMoved event)
@@ -245,21 +217,34 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		Projectile projectile = event.getProjectile();
 		Actor source = projectile.getInteracting();
 
-		// Only track projectiles from NPCs
-		if (source instanceof NPC)
+		// Only track projectiles from NPCs targeting the local player
+		if (!(source instanceof NPC))
 		{
-			NPC npc = (NPC) source;
-
-			// Only track if we're in a fight with this NPC
-			if (fightTracker != null && fightTracker.hasActiveFight())
-			{
-				int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
-				if (npc.getId() == currentBossId)
-				{
-					npcAttackTracker.recordNpcProjectile(npc, projectile.getId());
-				}
-			}
+			return;
 		}
+
+		NPC npc = (NPC) source;
+
+		// Only relevant while we have an active fight with this NPC
+		if (fightTracker == null || !fightTracker.hasActiveFight())
+		{
+			return;
+		}
+
+		int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
+		if (npc.getId() != currentBossId)
+		{
+			return;
+		}
+
+		// Convert remaining client cycles to ticks (30 cycles per tick)
+		int remainingCycles = projectile.getRemainingCycles();
+		int flightTimeTicks = (int) Math.ceil(remainingCycles / 30.0);
+
+		log.debug("[Plugin] Projectile from {} (id={}): remainingCycles={} flightTimeTicks={}",
+				npc.getName(), projectile.getId(), remainingCycles, flightTimeTicks);
+
+		npcAttackTracker.recordNpcProjectile(npc, projectile.getId(), flightTimeTicks);
 	}
 
 	@Subscribe
