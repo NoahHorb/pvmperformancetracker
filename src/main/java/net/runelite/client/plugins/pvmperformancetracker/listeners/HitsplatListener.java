@@ -51,7 +51,9 @@ public class HitsplatListener
     }
 
     /**
-     * Handle damage dealt to NPCs - this is where fights start
+     * Handle damage dealt to NPCs.
+     * Fight start is now handled by AnimationListener so expected damage is captured from attack #1.
+     * HitsplatListener still handles: fight switching on target change, recording actual damage.
      */
     private void handleDamageToNPC(NPC npc, Hitsplat hitsplat)
     {
@@ -72,13 +74,12 @@ public class HitsplatListener
         String npcName = npc.getName();
         int npcId = npc.getId();
         int damage = hitsplat.getAmount();
-        int currentTick = client.getTickCount();
 
         String playerName = determineHitsplatSource(npc);
         if (playerName == null)
         {
             log.debug("Skipping hitsplat to {}: could not determine source (not party member or local player)", npcName);
-            return; // Not from party member or local player
+            return;
         }
         log.debug("Processing hitsplat: {} damage to {} from {}", damage, npcName, playerName);
 
@@ -87,7 +88,6 @@ public class HitsplatListener
         {
             return;
         }
-
 
         Fight currentFight = fightTracker.getCurrentFight();
 
@@ -99,21 +99,22 @@ public class HitsplatListener
 
         if (currentFight == null || !currentFight.isActive())
         {
-            // No active fight - start new one on this first hitsplat
-            log.debug("Starting new fight on first hitsplat to {} (damage: {})", npcName, damage);
+            // AnimationListener should have started the fight already.
+            // If we still don't have one (e.g. animation wasn't detected), start it now as a fallback.
+            log.debug("No active fight at hitsplat time — starting fight as fallback for {} (damage: {})", npcName, damage);
             fightTracker.startNewFight(npcName, npcId);
             currentFight = fightTracker.getCurrentFight();
         }
         else if (currentFight.getBossNpcId() != npcId)
         {
-            // Different target than current fight
-            log.debug("Different NPC - current: {}, new: {}", currentFight.getBossNpcId(), npcId);
+            // Player switched targets — end current fight and start a new one
+            log.debug("Target changed — ending fight vs {} and starting new fight vs {}", currentFight.getBossName(), npcName);
             fightTracker.endCurrentFight();
             fightTracker.startNewFight(npcName, npcId);
             currentFight = fightTracker.getCurrentFight();
         }
 
-        // Record the damage (even if 0)
+        // Record the damage
         if (currentFight != null && currentFight.isActive())
         {
             fightTracker.addDamageDealt(playerName, damage, npcName);
@@ -129,33 +130,8 @@ public class HitsplatListener
         }
         else
         {
-            log.debug("NOT recording damage - fight is null or inactive");
+            log.debug("NOT recording damage — fight is null or inactive after start attempt");
         }
-//
-//        // Start a new fight if not already active
-//        if (!fightTracker.hasActiveFight())
-//        {
-//            fightTracker.startNewFight(npcName, npcId);
-//            log.debug("Fight started against {} (ID: {})", npcName, npcId);
-//        }
-//
-//        // Verify we're hitting the correct boss
-//        Fight currentFight = fightTracker.getCurrentFight();
-//        if (currentFight == null || currentFight.getBossNpcId() != npcId)
-//        {
-//            return;
-//        }
-//
-//        // Determine which player caused this hitsplat
-//        String damageDealer = determineHitsplatSource(npc);
-//        if (damageDealer != null)
-//        {
-//            PlayerStats stats = currentFight.getPlayerStats().get(damageDealer);
-//            if (stats != null)
-//            {
-//                stats.addDamageDealt(damage, currentTick, npcName);
-//            }
-//        }
     }
     /**
      * Handle damage taken by player from NPCs

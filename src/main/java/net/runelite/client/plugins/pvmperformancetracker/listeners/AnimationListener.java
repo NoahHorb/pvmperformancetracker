@@ -190,20 +190,60 @@ public class AnimationListener
 
     /**
      * Handle an attack animation from a player
-     * Records the attack and calculates expected damage
+     * Records the attack and calculates expected damage.
+     * Also starts a new fight if one isn't active yet (so expected damage is captured from the first hit).
      */
     private void handleAttackAnimation(Player player, int animationId)
     {
         FightTracker fightTracker = plugin.getFightTracker();
-
-        // Only record if there's an active fight
-        if (fightTracker == null || !fightTracker.hasActiveFight())
+        if (fightTracker == null)
         {
             return;
         }
 
         String playerName = player.getName();
         if (playerName == null)
+        {
+            return;
+        }
+
+        // --- Fight start logic (moved from HitsplatListener) ---
+        // If no fight is active, check if the player is attacking a trackable NPC
+        // and start a new fight so expected damage is recorded from the very first attack.
+        if (!fightTracker.hasActiveFight())
+        {
+            Actor interacting = player.getInteracting();
+            if (interacting instanceof NPC)
+            {
+                NPC targetNpc = (NPC) interacting;
+                boolean shouldTrack = targetNpc.getName() != null &&
+                        (!plugin.getConfig().trackBossesOnly() ||
+                                (plugin.getBossDetectionHelper() != null &&
+                                        plugin.getBossDetectionHelper().isBoss(targetNpc)));
+
+                if (shouldTrack)
+                {
+                    log.debug("AnimationListener: Starting new fight on first attack animation by {} against {}",
+                            playerName, targetNpc.getName());
+                    fightTracker.startNewFight(targetNpc.getName(), targetNpc.getId());
+                }
+                else
+                {
+                    log.debug("AnimationListener: Player attacking untracked NPC {}, skipping fight start",
+                            targetNpc.getName());
+                    return;
+                }
+            }
+            else
+            {
+                // No NPC target — can't start a fight
+                return;
+            }
+        }
+
+        // At this point a fight is active (either pre-existing or just started above)
+        Fight currentFight = fightTracker.getCurrentFight();
+        if (currentFight == null || !currentFight.isActive())
         {
             return;
         }
