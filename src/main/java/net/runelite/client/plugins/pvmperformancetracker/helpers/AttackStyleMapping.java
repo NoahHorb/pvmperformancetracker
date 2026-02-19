@@ -151,7 +151,7 @@ public class AttackStyleMapping
         // 6-tick attack cycle. Direct melee hitsplat lands 1 tick after anim.
         // Axes mechanic spawns travelling axes — damage non-schedulable (1-9t).
         // -------------------------------------------------------------------
-        for (int id : new int[]{eNPC.VARDORVIS, eNPC.VARDORVIS_2})
+        for (int id : eNPC.VARDORVIS)
         {
             registerDirectAttack(id, eAnimation.VARDORVIS_SLASH,     "slash", 1);
             registerDirectAttack(id, eAnimation.VARDORVIS_DASH,      "slash", 1);
@@ -163,7 +163,7 @@ public class AttackStyleMapping
         // Melee is animation-based (1-tick delay).
         // All other attacks are projectile-based — landing tick = flight time.
         // -------------------------------------------------------------------
-        for (int id : new int[]{eNPC.VORKATH, eNPC.VORKATH_DEAD})
+        for (int id : eNPC.VORKATH_AWAKENED)
         {
             registerDirectAttack(id, eAnimation.VORKATH_MELEE,       "slash",      1);
 
@@ -175,33 +175,41 @@ public class AttackStyleMapping
         // -------------------------------------------------------------------
         // Zulrah
         // All attacks are projectile-based.
+        // Each phase ID has distinct attack styles, handled per-ID below.
+        //   2042 Serpentine — ranged only
+        //   2043 Magma      — typeless (melee range, uses magic projectile ID)
+        //   2044 Tanzanite  — magic + ranged
         // -------------------------------------------------------------------
-        registerProjectile(eNPC.ZULRAH_SERPENTINE, eProjectile.ZULRAH_RANGED, "ranged");
+        for (int id : eNPC.ZULRAH) {
+            //registerDirectAttack();
 
-        registerProjectile(eNPC.ZULRAH_MAGMA,      eProjectile.ZULRAH_MAGIC,  "typeless");
+            //registerMechanic();
 
-        registerProjectile(eNPC.ZULRAH_TANZANITE,  eProjectile.ZULRAH_RANGED, "ranged");
-        registerProjectile(eNPC.ZULRAH_TANZANITE,  eProjectile.ZULRAH_MAGIC,  "magic");
-
+            registerProjectile(id, eProjectile.ZULRAH_RANGED, "ranged");
+            registerProjectile(id, eProjectile.ZULRAH_MAGIC, "typeless");
+        }
         // -------------------------------------------------------------------
         // TzTok-Jad
         // Melee is animation-based. Ranged and magic are projectile-based.
         // -------------------------------------------------------------------
-        registerDirectAttack(eNPC.TZTOK_JAD, eAnimation.JAD_MELEE,   "melee",  1);
-        registerProjectile  (eNPC.TZTOK_JAD, eProjectile.JAD_MAGIC,  "magic");
-        registerProjectile  (eNPC.TZTOK_JAD, eProjectile.JAD_RANGED, "ranged");
+        for (int id : eNPC.TZTOK_JAD)
+        {
+            registerDirectAttack(id, eAnimation.JAD_MELEE,   "melee",  1);
+            registerProjectile  (id, eProjectile.JAD_MAGIC,  "magic");
+            registerProjectile  (id, eProjectile.JAD_RANGED, "ranged");
+        }
 
         // -------------------------------------------------------------------
         // The Nightmare / Phosani's Nightmare
         // TODO: confirm all IDs from logs before enabling
         // -------------------------------------------------------------------
-        // for (int id : new int[]{eNPC.NIGHTMARE, eNPC.NIGHTMARE_2, eNPC.NIGHTMARE_3})
+        // for (int id : eNPC.THE_NIGHTMARE)
         // {
         //     registerDirectAttack(id, eAnimation.NIGHTMARE_MELEE,   "melee",  1);
         //     registerProjectile  (id, eProjectile.NIGHTMARE_RANGED, "ranged");
         //     registerProjectile  (id, eProjectile.NIGHTMARE_MAGIC,  "magic");
         // }
-        // for (int id : new int[]{eNPC.PHOSANI_NIGHTMARE, eNPC.PHOSANI_NIGHTMARE_2, eNPC.PHOSANI_NIGHTMARE_3})
+        // for (int id : eNPC.PHOSANI_S_NIGHTMARE)
         // {
         //     registerDirectAttack(id, eAnimation.NIGHTMARE_MELEE,   "melee",  1);
         //     registerProjectile  (id, eProjectile.NIGHTMARE_RANGED, "ranged");
@@ -212,7 +220,7 @@ public class AttackStyleMapping
         // Duke Sucellus
         // TODO: confirm IDs from logs before enabling
         // -------------------------------------------------------------------
-        // for (int id : new int[]{eNPC.DUKE_SUCELLUS, eNPC.DUKE_SUCELLUS_AWAKENED})
+        // for (int id : eNPC.DUKE_SUCELLUS)
         // {
         //     registerDirectAttack(id, eAnimation.DUKE_MELEE,        "melee",  1);
         //     registerMechanic    (id, eAnimation.DUKE_POISON_SPAWN,  "poison");
@@ -222,7 +230,7 @@ public class AttackStyleMapping
         // The Leviathan
         // TODO: confirm IDs from logs before enabling
         // -------------------------------------------------------------------
-        // for (int id : new int[]{eNPC.LEVIATHAN, eNPC.LEVIATHAN_AWAKENED})
+        // for (int id : eNPC.THE_LEVIATHAN)
         // {
         //     registerProjectile(id, eProjectile.LEVIATHAN_RANGED,    "ranged");
         //     registerProjectile(id, eProjectile.LEVIATHAN_MAGIC,     "magic");

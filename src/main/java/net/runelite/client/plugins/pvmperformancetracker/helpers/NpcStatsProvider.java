@@ -27,6 +27,7 @@ import java.util.Map;
 public class NpcStatsProvider
 {
     // URL to your GitHub-hosted database
+    //https://raw.githubusercontent.com/NoahHorb/scraperwiki/refs/heads/master/npc_database.json
     private static final String NPC_DATABASE_URL = "https://raw.githubusercontent.com/NoahHorb/scraperwiki/refs/heads/master/npc_database.json";
     private static final String CACHE_FILE_NAME = "npc-database.json";
     private final Client client;
