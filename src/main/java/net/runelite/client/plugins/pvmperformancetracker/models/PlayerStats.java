@@ -37,6 +37,8 @@ public class PlayerStats
     private int baseAttackingTicksLost;
     private double baseExpectedDamageDealt;
     private int baseExpectedDamageCalculations;
+    private int baseChancesOfDeath;
+    private double baseCumulativeDeathChance;  // Compounding survival formula across fights
 
     // Defensive Metrics
     private int damageTaken; // Total damage taken
@@ -80,6 +82,8 @@ public class PlayerStats
         this.unavoidableDamageTaken = 0;
         this.chancesOfDeath = 0;
         this.cumulativeDeathChance = 0.0;
+        this.baseChancesOfDeath = 0;
+        this.baseCumulativeDeathChance = 0.0;
         this.isLocalPlayer = false;
         this.currentWeaponSpeed = 4; // Default
     }
@@ -313,56 +317,81 @@ public class PlayerStats
     }
 
     /**
-     * Sync Overall stats with current fight for real-time display
-     * Overall shows: base (from previous fights) + current (from active fight)
+     * Sync Overall stats with current fight for real-time display.
+     * Overall shows: base (locked-in from previous fights) + current (active fight).
      */
     public void syncWithCurrentFight(PlayerStats currentStats, int currentTick)
     {
-        // Set displayed values to base + current
-        this.damageDealt = baseDamageDealt + currentStats.getDamageDealt();
-        this.totalAttacks = baseTotalAttacks + currentStats.getTotalAttacks();
-        this.successfulHits = baseSuccessfulHits + currentStats.getSuccessfulHits();
-        this.expectedDamageDealt = baseExpectedDamageDealt + currentStats.getExpectedDamageDealt();
+        // Offensive stats — base + current
+        this.damageDealt               = baseDamageDealt + currentStats.getDamageDealt();
+        this.totalAttacks              = baseTotalAttacks + currentStats.getTotalAttacks();
+        this.successfulHits            = baseSuccessfulHits + currentStats.getSuccessfulHits();
+        this.expectedDamageDealt       = baseExpectedDamageDealt + currentStats.getExpectedDamageDealt();
         this.expectedDamageCalculations = baseExpectedDamageCalculations + currentStats.getExpectedDamageCalculations();
 
         // Tick loss: base (finalized) + current (real-time)
         int currentTickLoss = currentStats.calculateTicksLost(currentTick, true);
         this.attackingTicksLost = baseAttackingTicksLost + currentTickLoss;
 
-        // Copy weapon state for display
-        this.lastAttackTick = currentStats.getLastAttackTick();
+        // Weapon state for display
+        this.lastAttackTick    = currentStats.getLastAttackTick();
         this.currentWeaponSpeed = currentStats.getCurrentWeaponSpeed();
 
-        // Defensive stats - sync with current fight
-        this.damageTaken = currentStats.getDamageTaken();
-        this.avoidableDamageTaken = currentStats.getAvoidableDamageTaken();
-        this.prayableDamageTaken = currentStats.getPrayableDamageTaken();
+        // Defensive damage totals — base + current
+        this.damageTaken          = currentStats.getDamageTaken();
+        this.avoidableDamageTaken  = currentStats.getAvoidableDamageTaken();
+        this.prayableDamageTaken   = currentStats.getPrayableDamageTaken();
         this.unavoidableDamageTaken = currentStats.getUnavoidableDamageTaken();
-        this.chancesOfDeath = currentStats.getChancesOfDeath();
-        this.cumulativeDeathChance = currentStats.getCumulativeDeathChance();
+
+        // Death probability — compound base (previous fights) with current fight.
+        // This produces the correct cumulative probability across all sessions.
+        // e.g. base=5%, current=3.5% → displayed = 1 - (0.95 * 0.965) = 8.33%
+        this.chancesOfDeath = baseChancesOfDeath + currentStats.getChancesOfDeath();
+        double baseSurvival    = 1.0 - baseCumulativeDeathChance;
+        double currentSurvival = 1.0 - currentStats.getCumulativeDeathChance();
+        this.cumulativeDeathChance = 1.0 - (baseSurvival * currentSurvival);
     }
 
     /**
      * Lock current fight stats into Overall's base values
      * Called when a fight ends
      */
+    /**
+     * Lock current fight stats into Overall's base values.
+     * Called when a fight ends.
+     */
     public void lockInFightStats(PlayerStats currentStats)
     {
-        // Add finalized current fight to base
-        baseDamageDealt += currentStats.getDamageDealt();
-        baseTotalAttacks += currentStats.getTotalAttacks();
-        baseSuccessfulHits += currentStats.getSuccessfulHits();
-        baseAttackingTicksLost += currentStats.getAttackingTicksLost();
-        baseExpectedDamageDealt += currentStats.getExpectedDamageDealt();
+        // Offensive stats — simple addition
+        baseDamageDealt              += currentStats.getDamageDealt();
+        baseTotalAttacks             += currentStats.getTotalAttacks();
+        baseSuccessfulHits           += currentStats.getSuccessfulHits();
+        baseAttackingTicksLost       += currentStats.getAttackingTicksLost();
+        baseExpectedDamageDealt      += currentStats.getExpectedDamageDealt();
         baseExpectedDamageCalculations += currentStats.getExpectedDamageCalculations();
 
-        // Update displayed values to match base (no current fight now)
-        this.damageDealt = baseDamageDealt;
-        this.totalAttacks = baseTotalAttacks;
-        this.successfulHits = baseSuccessfulHits;
-        this.attackingTicksLost = baseAttackingTicksLost;
-        this.expectedDamageDealt = baseExpectedDamageDealt;
+        // Death probability — compound using survival formula so that
+        // e.g. 3.5% + 3.5% = 6.88%, not 7.0%.
+        // baseCumulativeDeathChance represents all previous fights combined.
+        // We merge the current fight's death chance into it.
+        baseChancesOfDeath += currentStats.getChancesOfDeath();
+        double baseSurvival    = 1.0 - baseCumulativeDeathChance;
+        double currentSurvival = 1.0 - currentStats.getCumulativeDeathChance();
+        baseCumulativeDeathChance = 1.0 - (baseSurvival * currentSurvival);
+
+        // Defensive damage totals — also lock in
+        // (These don't have separate base fields yet; if you add them later,
+        //  follow the same pattern. For now we keep them on the display fields.)
+
+        // Update displayed values to match base (no current fight active now)
+        this.damageDealt               = baseDamageDealt;
+        this.totalAttacks              = baseTotalAttacks;
+        this.successfulHits            = baseSuccessfulHits;
+        this.attackingTicksLost        = baseAttackingTicksLost;
+        this.expectedDamageDealt       = baseExpectedDamageDealt;
         this.expectedDamageCalculations = baseExpectedDamageCalculations;
+        this.chancesOfDeath            = baseChancesOfDeath;
+        this.cumulativeDeathChance     = baseCumulativeDeathChance;
 
         // Reset weapon state since no current fight
         this.lastAttackTick = null;
