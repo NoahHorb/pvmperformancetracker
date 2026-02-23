@@ -142,11 +142,11 @@ public class AnimationListener
         }
 
         // Only track the boss we're fighting
-        int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
-        if (npc.getId() != currentBossId)
-        {
-            return;
-        }
+//        int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
+//        if (npc.getId() != currentBossId)
+//        {
+//            return;
+//        }
 
         int animationId = npc.getAnimation();
         if (animationId == -1)

@@ -45,7 +45,7 @@ public class AttackStyleMapping
     // Registration API
     // -----------------------------------------------------------------------
 
-    public static void registerDirectAttack(int npcId, int animId, String style, int delayTicks)
+    public static void registerScheduledDirectAttack(int npcId, int animId, String style, int delayTicks)
     {
         animationMappings.computeIfAbsent(npcId, k -> new HashMap<>()).put(animId, style);
         animationDelays.computeIfAbsent(npcId, k -> new HashMap<>()).put(animId, delayTicks);
@@ -126,35 +126,26 @@ public class AttackStyleMapping
         // Spot: VFX_VARDORVIS_HEAD_PROJECTILE_MAGIC_01=2520, *_RANGED_01=2521
         for (int id : eNPC.VARDORVIS)
         {
-            registerDirectAttack(id, AnimationID.NPC_VARDORVIS_01_MELEE_01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_VARDORVIS_01_MELEE_01, "slash", 1);
+            registerMechanic(id, AnimationID.NPC_VARDORVIS_01_DASH_01, "spikes");
+            registerMechanic(id, AnimationID.NPC_VARDORVIS_01_ENTANGLE_START, "strangle");
             registerMechanic    (id, AnimationID.NPC_VARDORVIS_AXE_01_ATTACK_START, "axes");
             registerProjectile  (id, SpotanimID.VFX_VARDORVIS_HEAD_PROJECTILE_MAGIC_01,  "magic");
             registerProjectile  (id, SpotanimID.VFX_VARDORVIS_HEAD_PROJECTILE_RANGED_01,  "ranged");
+
         }
 
         // Duke Sucellus — melee + magic projectile + gaze mechanic + vents
         // Anim: NPC_DUKE_SUCELLUS01_ATTACK_MELEE_01=10176, _SIGHT_ATTACK_01=10180
         // Spot: VFX_DUKE_SUCELLUS_ATTACK_MAGIC_PROJECTILE_01=2434, PROJANIM_DUKE_SPIT_01=2436
-        for (int id : eNPC.DUKE_SUCELLUS_AWAKENED)
-        {
-            registerDirectAttack(id, AnimationID.NPC_DUKE_SUCELLUS01_ATTACK_MELEE_01, "melee", 1);
-            registerProjectile  (id, SpotanimID.VFX_DUKE_SUCELLUS_ATTACK_MAGIC_PROJECTILE_01,  "magic");
-            registerProjectile  (id, SpotanimID.PROJANIM_DUKE_SPIT_01,  "magic");
-            registerMechanic    (id, AnimationID.NPC_DUKE_SUCELLUS01_SIGHT_ATTACK_01, "gaze");
-        }
-        for (int id : eNPC.DUKE_SUCELLUS_POST_QUEST)
-        {
-            registerDirectAttack(id, AnimationID.NPC_DUKE_SUCELLUS01_ATTACK_MELEE_01, "melee", 1);
-            registerProjectile  (id, SpotanimID.VFX_DUKE_SUCELLUS_ATTACK_MAGIC_PROJECTILE_01,  "magic");
-            registerProjectile  (id, SpotanimID.PROJANIM_DUKE_SPIT_01,  "magic");
-            registerMechanic    (id, AnimationID.NPC_DUKE_SUCELLUS01_SIGHT_ATTACK_01, "gaze");
-        }
-        for (int id : eNPC.DUKE_SUCELLUS_QUEST)
-        {
-            registerDirectAttack(id, AnimationID.NPC_DUKE_SUCELLUS01_ATTACK_MELEE_01, "melee", 1);
-            registerProjectile  (id, SpotanimID.VFX_DUKE_SUCELLUS_ATTACK_MAGIC_PROJECTILE_01,  "magic");
-            registerProjectile  (id, SpotanimID.PROJANIM_DUKE_SPIT_01,  "magic");
-            registerMechanic    (id, AnimationID.NPC_DUKE_SUCELLUS01_SIGHT_ATTACK_01, "gaze");
+        for (int[] group : new int[][]{eNPC.DUKE_SUCELLUS_AWAKENED, eNPC.DUKE_SUCELLUS_POST_QUEST, eNPC.DUKE_SUCELLUS_QUEST}){
+            for (int id : group)
+            {
+                registerScheduledDirectAttack(id, AnimationID.NPC_DUKE_SUCELLUS01_ATTACK_MELEE_01, "crush", 1);
+                registerProjectile  (id, SpotanimID.VFX_DUKE_SUCELLUS_ATTACK_MAGIC_PROJECTILE_01,  "magic");
+                registerProjectile  (id, SpotanimID.PROJANIM_DUKE_SPIT_01,  "magic");
+                registerMechanic    (id, AnimationID.NPC_DUKE_SUCELLUS01_SIGHT_ATTACK_01, "gaze");
+            }
         }
 
         // The Leviathan — melee (head + tail) + ranged/magic/melee projectiles + rock mechanic
@@ -162,11 +153,11 @@ public class AttackStyleMapping
         // Spot: VFX_LEVIATHAN_01_PROJECTILE_RANGED_01=2487, _MAGIC_01=2489, _MELEE_01=2488
         for (int id : eNPC.THE_LEVIATHAN)
         {
-            registerDirectAttack(id, AnimationID.NPC_LEVIATHAN_01_MELEE_01, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_LEVIATHAN_01_MELEE_02, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEE01, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEEVARIANT01, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEEVARIANT02, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_LEVIATHAN_01_MELEE_01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_LEVIATHAN_01_MELEE_02, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEE01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEEVARIANT01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_LEVIATHAN_TAIL01_MELEEVARIANT02, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_LEVIATHAN_01_PROJECTILE_SPOTANIM_RANGED_01,  "ranged");
             registerProjectile  (id, SpotanimID.VFX_LEVIATHAN_01_PROJECTILE_RANGED_01,  "ranged");
             registerProjectile  (id, SpotanimID.VFX_LEVIATHAN_01_PROJECTILE_SPOTANIM_MAGIC_01,  "magic");
@@ -180,7 +171,7 @@ public class AttackStyleMapping
         // Spot: PROJ_WHISPERER_01_MAGIC_01=2445, PROJ_WHISPERER_01_RANGED_01=2444
         for (int id : eNPC.THE_WHISPERER)
         {
-            registerDirectAttack(id, AnimationID.NPC_WHISPERER_01_ATTACK_MELEE_01, "melee",   1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_WHISPERER_01_ATTACK_MELEE_01, "melee",   1);
             registerProjectile  (id, SpotanimID.PROJ_WHISPERER_01_RANGED_01,  "ranged");
             registerProjectile  (id, SpotanimID.PROJ_WHISPERER_01_MAGIC_01,  "magic");
             registerMechanic    (id, AnimationID.NPC_WHISPERER_01_ATTACK_SCREECH_01_START, "screech");
@@ -196,7 +187,7 @@ public class AttackStyleMapping
         // Spot: VORKATH_RANGED_TRAVEL=1477, _MAGIC_TRAVEL=1479, _AREA_TRAVEL=1481, _ACID_TRAVEL=1483
         for (int id : eNPC.VORKATH_AWAKENED)
         {
-            registerDirectAttack(id, AnimationID.DS2_VORKATH_ATTACK_MELEE, "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.DS2_VORKATH_ATTACK_MELEE, "melee",      1);
             registerProjectile  (id, SpotanimID.VORKATH_RANGED_TRAVEL, "ranged");
             registerProjectile  (id, SpotanimID.VORKATH_RANGED_IMPACT, "ranged");       // VORKATH_RANGED_IMPACT
             registerProjectile  (id, SpotanimID.VORKATH_MAGIC_TRAVEL, "magic");
@@ -214,8 +205,8 @@ public class AttackStyleMapping
         //       GALVEK_FIRE_PROJ=1495, GALVEK_WIND_PROJ=1496, GALVEK_WATER_PROJ=1497
         for (int id : eNPC.GALVEK_MONSTER)
         {
-            registerDirectAttack(id, AnimationID.GALVEK_GROUNDED_SLASH, "melee",      1);
-            registerDirectAttack(id, AnimationID.GALVEK_GROUNDED_BREATH, "dragonfire", 1);
+            registerScheduledDirectAttack(id, AnimationID.GALVEK_GROUNDED_SLASH, "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.GALVEK_GROUNDED_BREATH, "dragonfire", 1);
             registerProjectile  (id, SpotanimID.GALVEK_RANGED_TRAVEL, "ranged");        // wind
             registerProjectile  (id, SpotanimID.GALVEK_MAGIC_TRAVEL, "magic");         // water
             registerProjectile  (id, SpotanimID.GALVEK_EARTH_PROJ, "magic");         // earth
@@ -227,8 +218,16 @@ public class AttackStyleMapping
 
         // Elvarg (Dragon Slayer I)
         // Anim: DRAGONSLAYER_ELVARG_FIRE=6642, DRAGONSLAYER_ELVARG_FIRE2=6643
-        for (int id : eNPC.ELVARG)      { registerDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE, "dragonfire", 1); registerDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE2, "dragonfire", 1); }
-        for (int id : eNPC.ELVARG_HARD) { registerDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE, "dragonfire", 1); registerDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE2, "dragonfire", 1); }
+        for (int id : eNPC.ELVARG)      
+        { 
+            registerScheduledDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE, "dragonfire", 1); 
+            registerScheduledDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE2, "dragonfire", 1); 
+        }
+        for (int id : eNPC.ELVARG_HARD) 
+        { 
+            registerScheduledDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE, "dragonfire", 1); 
+            registerScheduledDirectAttack(id, AnimationID.DRAGONSLAYER_ELVARG_FIRE2, "dragonfire", 1); 
+        }
 
         // ===================================================================
         // Inferno / Fight Caves
@@ -245,7 +244,7 @@ public class AttackStyleMapping
         // Spot: INFERNO_ZUK_PROJECTILE=1375, _MID=2381, _SMALL=2261, _GIGANTIC=3294
         for (int id : eNPC.TZKAL_ZUK)
         {
-            registerDirectAttack(id, AnimationID.ZUK_ATTACK, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.ZUK_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.INFERNO_ZUK_PROJECTILE, "ranged");
             registerProjectile  (id, SpotanimID.INFERNO_ZUK_PROJECTILE_SMALL, "ranged");
             registerProjectile  (id, SpotanimID.INFERNO_ZUK_PROJECTILE_MID, "ranged");
@@ -257,18 +256,18 @@ public class AttackStyleMapping
         // Anim: JALXIL_ATTACK_MELEE=7604, JALXIL_ATTACK_RANGED=7605
         for (int id : eNPC.JAL_XIL)
         {
-            registerDirectAttack(id, AnimationID.JALXIL_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.JALXIL_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.JALXIL_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.JALXIL_ATTACK_RANGED, "ranged", 1);
         }
 
         // Jal-Ak — melee/magic/ranged blob (3 attack styles)
         // Anim: JALAK_ATTACK_MELEE=7582, JALAK_ATTACK_MAGIC=7581, JALAK_ATTACK_RANGED=7583
         for (int id : eNPC.JAL_AK)
         {
-            registerDirectAttack(id, AnimationID.JALAK_ATTACK_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.JALAK_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.JALAK_ATTACK_RANGED, "ranged", 1);
-            registerDirectAttack(id, AnimationID.JALAKXIL_ATTACK_MELEE, "melee",  1); // sub-blob JALAKXIL_ATTACK_MELEE
+            registerScheduledDirectAttack(id, AnimationID.JALAK_ATTACK_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.JALAK_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.JALAK_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.JALAKXIL_ATTACK_MELEE, "melee", 1); // sub-blob JALAKXIL_ATTACK_MELEE
         }
 
         // ===================================================================
@@ -286,7 +285,7 @@ public class AttackStyleMapping
         // Spot: TOB_BLOAT_FALLING_FLESH1-4=1570-1573
         for (int id : eNPC.PESTILENT_BLOAT)
         {
-            registerDirectAttack(id, AnimationID.TOB_BLOAT_SWINGING_CHAIN, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TOB_BLOAT_SWINGING_CHAIN, "melee", 1);
             registerMechanic    (id, SpotanimID.TOB_BLOAT_FALLING_FLESH1, "flesh");
             registerMechanic    (id, SpotanimID.TOB_BLOAT_FALLING_FLESH2, "flesh");
             registerMechanic    (id, SpotanimID.TOB_BLOAT_FALLING_FLESH3, "flesh");
@@ -307,8 +306,8 @@ public class AttackStyleMapping
         // Spot: TOB_SOTETSEG_MAGING=1606, TOB_SOTETSEG_RANGING=1607, TOB_SOTETSEG_SHAREDATTACK=1604
         for (int id : eNPC.SOTETSEG)
         {
-            registerDirectAttack(id, AnimationID.TOB_SOTETSEG_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.TOB_SOTETSEG_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.TOB_SOTETSEG_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TOB_SOTETSEG_ATTACK_RANGED, "ranged", 1);
             registerProjectile  (id, SpotanimID.TOB_SOTETSEG_MAGING, "magic");
             registerProjectile  (id, SpotanimID.TOB_SOTETSEG_RANGING, "ranged");
             registerMechanic    (id, SpotanimID.TOB_SOTETSEG_SHAREDATTACK, "maze");
@@ -319,7 +318,7 @@ public class AttackStyleMapping
         // Spot: TOB_XARPUS_ACIDSPIT=1555, TOB_XARPUS_GUANO=1557
         for (int id : eNPC.XARPUS_PHASE_2_3)
         {
-            registerDirectAttack(id, AnimationID.TOB_XARPUS_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.TOB_XARPUS_ATTACK_RANGED, "ranged", 1);
             registerProjectile  (id, SpotanimID.TOB_XARPUS_ACIDSPIT, "ranged");
             registerMechanic    (id, SpotanimID.TOB_XARPUS_GUANO, "guano");
         }
@@ -359,15 +358,15 @@ public class AttackStyleMapping
         //       enraged: 7493, 7494, 7492
         for (int id : eNPC.TEKTON)
         {
-            registerDirectAttack(id, AnimationID.TEKTON_ATTACK_STAB, "melee", 1);
-            registerDirectAttack(id, AnimationID.TEKTON_SLASH, "melee", 1);
-            registerDirectAttack(id, AnimationID.TEKTON_HAMMER_CRUSH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_ATTACK_STAB, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_SLASH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_HAMMER_CRUSH, "melee", 1);
         }
         for (int id : eNPC.TEKTON_ENRAGED)
         {
-            registerDirectAttack(id, AnimationID.TEKTON_HAMMER_CRUSH_ENRAGED, "melee", 1);
-            registerDirectAttack(id, AnimationID.TEKTON_ATTACK_STAB_ENRAGED, "melee", 1);
-            registerDirectAttack(id, AnimationID.TEKTON_SLASH_ENRAGED, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_HAMMER_CRUSH_ENRAGED, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_ATTACK_STAB_ENRAGED, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TEKTON_SLASH_ENRAGED, "melee", 1);
         }
 
         // Vespula — melee + poison portal projectile
@@ -375,7 +374,7 @@ public class AttackStyleMapping
         // Spot: RAIDS_VESPULA_POISON=1364, RAIDS_VESPULA_PORTAL_ATTACK=1366
         for (int id : eNPC.VESPULA)
         {
-            registerDirectAttack(id, AnimationID.VESPULA_ATTACK_MELEE_FLYING, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.VESPULA_ATTACK_MELEE_FLYING, "melee", 1);
             registerProjectile  (id, SpotanimID.RAIDS_VESPULA_POISON, "magic");
             registerProjectile  (id, SpotanimID.RAIDS_VESPULA_PORTAL_ATTACK, "magic");
         }
@@ -390,7 +389,7 @@ public class AttackStyleMapping
         //       TOA_BABA_ROCK_FALL=2250-2252 (mechanic)
         for (int id : eNPC.BA_BA)
         {
-            registerDirectAttack(id, AnimationID.NPC_BABA_ATTACK_MELEE, "melee",    1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_BABA_ATTACK_MELEE, "melee",    1);
             registerProjectile  (id, SpotanimID.TOA_BABA_RANGED_TRAVEL, "ranged");
             registerProjectile  (id, SpotanimID.TOA_BABA_BALLS_TRAVEL, "ranged");
             registerMechanic    (id, SpotanimID.TOA_BABA_ROCK_FALL, "rockfall");
@@ -403,8 +402,8 @@ public class AttackStyleMapping
         // Spot: AKKHA_MAGIC_TRAVEL=2253, AKKHA_RANGED_TRAVEL=2255
         for (int id : eNPC.AKKHA)
         {
-            registerDirectAttack(id, AnimationID.NPC_AKKHA_ATTACK_MELEE_SPEAR, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_AKKHA_ATTACK_MELEE_SWORD, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_AKKHA_ATTACK_MELEE_SPEAR, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_AKKHA_ATTACK_MELEE_SWORD, "melee", 1);
             registerProjectile  (id, SpotanimID.AKKHA_MAGIC_TRAVEL, "magic");
             registerProjectile  (id, SpotanimID.AKKHA_MAGIC_IMPACT, "magic");
             registerProjectile  (id, SpotanimID.AKKHA_RANGED_TRAVEL, "ranged");
@@ -417,8 +416,8 @@ public class AttackStyleMapping
         // Spot: ZEBAK_MAGE_PROJANIM_INITIAL=2176, ZEBAK_RANGE_PROJANIM_INITIAL=2178
         for (int id : eNPC.ZEBAK_MONSTER)
         {
-            registerDirectAttack(id, AnimationID.NPC_ZEBAK01_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_ZEBAK02_ATTACK_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_ZEBAK01_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_ZEBAK02_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.ZEBAK_MAGE_PROJANIM_INITIAL, "magic");
             registerProjectile  (id, SpotanimID.ZEBAK_MAGE_PROJANIM_INITIAL_ENRAGED, "magic");
             registerProjectile  (id, SpotanimID.ZEBAK_RANGE_PROJANIM_INITIAL, "ranged");
@@ -444,9 +443,9 @@ public class AttackStyleMapping
         //       NEX_ICE_ATTACK_PROJ=2004, NEX_FINALE=2007
         for (int id : eNPC.NEX)
         {
-            registerDirectAttack(id, AnimationID.NEX_DASH_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.NEX_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.NEX_SMASH_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NEX_DASH_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NEX_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NEX_SMASH_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.NEX_SMOKE_ATTACK_PROJ, "magic"); // smoke phase
             registerProjectile  (id, SpotanimID.NEX_SHADOW_ATTACK_PROJ, "magic"); // shadow phase
             registerProjectile  (id, SpotanimID.NEX_BLOOD_ATTACK_PROJ, "magic"); // blood phase
@@ -465,8 +464,8 @@ public class AttackStyleMapping
         // Spot: FX_CALLISTO_RANGED_PROJECTILE=2350
         for (int id : eNPC.CALLISTO)
         {
-            registerDirectAttack(id, AnimationID.NPC_CALLISTO_ATTACK_MELEE01, "melee", 1);
-            registerDirectAttack(id, AnimationID.CALLISTO_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_CALLISTO_ATTACK_MELEE01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.CALLISTO_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.FX_CALLISTO_RANGED_PROJECTILE,  "ranged");
             registerProjectile  (id, SpotanimID.FX_CALLISTO_RANGED_IMPACT,  "ranged");
             registerMechanic    (id, SpotanimID.FX_CALLISTO_TRAP,  "trap");
@@ -474,7 +473,7 @@ public class AttackStyleMapping
         // Artio (Calvarion-tier Callisto)
         for (int id : eNPC.ARTIO)
         {
-            registerDirectAttack(id, AnimationID.NPC_CALLISTO_ATTACK_MELEE01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_CALLISTO_ATTACK_MELEE01, "melee", 1);
             registerProjectile  (id, SpotanimID.FX_CALLISTO_RANGED_PROJECTILE,  "ranged");
             registerMechanic    (id, SpotanimID.FX_CALLISTO_TRAP,  "trap");
         }
@@ -484,8 +483,8 @@ public class AttackStyleMapping
         // Spot: FX_VETION_ATTACK_MAGIC_01=2344, SPELLS_VETION01_TRAVEL=2337
         for (int id : eNPC.VET_ION)
         {
-            registerDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_01, "melee", 1);
-            registerDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_02, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_02, "melee", 1);
             registerProjectile  (id, SpotanimID.SPELLS_VETION01_TRAVEL, "magic");
             registerProjectile  (id, SpotanimID.SPELLS_VETION01_TRAVEL02, "magic"); // SPELLS_VETION01_TRAVEL02
             registerProjectile  (id, SpotanimID.FX_VETION_ATTACK_MAGIC_01, "magic");
@@ -494,7 +493,7 @@ public class AttackStyleMapping
         // Calvar'ion (Vet'ion reskin)
         for (int id : eNPC.CALVAR_ION)
         {
-            registerDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_01, "melee", 1); // TODO - verify same IDs
+            registerScheduledDirectAttack(id, AnimationID.NPC_VETION_ATTACK_MELEE_01, "melee", 1); // TODO - verify same IDs
             registerProjectile  (id, SpotanimID.SPELLS_VETION01_TRAVEL, "magic");
             registerProjectile  (id, SpotanimID.FX_VETION_ATTACK_MAGIC_01, "magic");
         }
@@ -504,14 +503,14 @@ public class AttackStyleMapping
         // Spot: FX_VENENATIS_RANGED_PROJECTILE=2356, _MAGIC_PROJECTILE=2358, _WEB_PROJECTILE=2360
         for (int id : eNPC.VENENATIS)
         {
-            registerDirectAttack(id, AnimationID.NPC_VENENATIS_MELEE_01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_VENENATIS_MELEE_01, "melee", 1);
             registerProjectile  (id, SpotanimID.FX_VENENATIS_RANGED_PROJECTILE, "ranged");
             registerProjectile  (id, SpotanimID.FX_VENENATIS_MAGIC_PROJECTILE, "magic");
             registerMechanic    (id, SpotanimID.FX_VENENATIS_WEB_PROJECTILE, "web");
         }
         for (int id : eNPC.SPINDEL) // Spindel = Venenatis reskin; shares spider boss attack style
         {
-            registerDirectAttack(id, AnimationID.NPC_VENENATIS_MELEE_01, "melee",  1); // TODO - verify
+            registerScheduledDirectAttack(id, AnimationID.NPC_VENENATIS_MELEE_01, "melee", 1); // TODO - verify
             registerProjectile  (id, SpotanimID.FX_VENENATIS_RANGED_PROJECTILE, "ranged");    // TODO - verify
             registerProjectile  (id, SpotanimID.FX_VENENATIS_MAGIC_PROJECTILE, "magic");     // TODO - verify
         }
@@ -539,10 +538,10 @@ public class AttackStyleMapping
         //       CERBERUS_SPECIAL_ATTACK_SPRAY=4493, CERBERUS_SPECIAL_ATTACK_FLAME=4501
         for (int id : eNPC.CERBERUS)
         {
-            registerDirectAttack(id, AnimationID.CERBERUS_ATTACK_RANGE, "ranged", 1);
-            registerDirectAttack(id, AnimationID.CERBERUS_BITE, "melee",  1);
-            registerDirectAttack(id, AnimationID.CERBERUS_FIRE_BREATH, "magic",  1);
-            registerDirectAttack(id, AnimationID.CERBERUS_SPECIAL_ATTACK_SPRAY, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.CERBERUS_ATTACK_RANGE, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.CERBERUS_BITE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.CERBERUS_FIRE_BREATH, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.CERBERUS_SPECIAL_ATTACK_SPRAY, "magic", 1);
             registerMechanic    (id, AnimationID.CERBERUS_SPECIAL_ATTACK_FLAME, "flames");
         }
 
@@ -551,18 +550,18 @@ public class AttackStyleMapping
         //       GG_DUSK_ATTACK_SLASH=7786, GG_DUSK_ATTACK_SWEEP=7788, GG_DUSK_ENRAGE_ATTACK_RANGED=7801
         for (int id : eNPC.DAWN)
         {
-            registerDirectAttack(id, AnimationID.GG_DAWN_ATTACK_SLASH, "melee",  1);
-            registerDirectAttack(id, AnimationID.GG_DAWN_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DAWN_ATTACK_SLASH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DAWN_ATTACK_RANGED, "ranged", 1);
             registerMechanic    (id, AnimationID.GG_DAWN_ATTACK_SPECIAL, "special");
         }
         for (int id : eNPC.DUSK)
         {
-            registerDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SLASH_DEFENSIVE, "melee", 1);
-            registerDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SLASH, "melee", 1);
-            registerDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SWEEP_DEFENSIVE, "melee", 1);
-            registerDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SWEEP, "melee", 1);
-            registerDirectAttack(id, AnimationID.GG_DUSK_ENRAGE_ATTACK_SLASH, "melee", 1);
-            registerDirectAttack(id, AnimationID.GG_DUSK_ENRAGE_ATTACK_RANGED, "ranged",1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SLASH_DEFENSIVE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SLASH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SWEEP_DEFENSIVE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ATTACK_SWEEP, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ENRAGE_ATTACK_SLASH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GG_DUSK_ENRAGE_ATTACK_RANGED, "ranged",1);
             registerMechanic    (id, AnimationID.GG_DUSK_ATTACK_SPECIAL, "special");
             registerMechanic    (id, AnimationID.GG_DUSK_ENRAGE_ATTACK_SPECIAL, "special");
             registerMechanic    (id, AnimationID.GG_DUSK_ATTACK_FORCEFIELD, "forcefield");
@@ -573,8 +572,8 @@ public class AttackStyleMapping
         // Spot: MARBLE_GARGOYLE_RANGEDSTUN_PROJECTILE=1453
         for (int id : eNPC.MARBLE_GARGOYLE)
         {
-            registerDirectAttack(id, AnimationID.GARGOYLE_ATTACK, "melee",  1);
-            registerDirectAttack(id, AnimationID.GARGOYLE_MARBLE_ATTACK, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.GARGOYLE_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GARGOYLE_MARBLE_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.MARBLE_GARGOYLE_RANGEDSTUN_PROJECTILE, "ranged");
         }
 
@@ -583,15 +582,15 @@ public class AttackStyleMapping
         // Spot: DRAKE_RANGE_PROJ=1636, DRAKE_BURN_PROJ=1637
         for (int id : eNPC.DRAKE)
         {
-            registerDirectAttack(id, AnimationID.DRAKE_MELEE, "melee",      1);
-            registerDirectAttack(id, AnimationID.DRAKE_RANGED, "ranged",     1);
+            registerScheduledDirectAttack(id, AnimationID.DRAKE_MELEE, "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.DRAKE_RANGED, "ranged",     1);
             registerProjectile  (id, SpotanimID.DRAKE_RANGE_PROJ, "ranged");
             registerProjectile  (id, SpotanimID.DRAKE_BURN_PROJ, "dragonfire");
         }
         for (int id : eNPC.GUARDIAN_DRAKE)
         {
-            registerDirectAttack(id, AnimationID.DRAKE_MELEE, "melee",      1);
-            registerDirectAttack(id, AnimationID.SUPERIOR_DRAKE_MELEE_SPECIAL, "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.DRAKE_MELEE, "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.SUPERIOR_DRAKE_MELEE_SPECIAL, "melee",      1);
             registerProjectile  (id, SpotanimID.DRAKE_BURN_PROJ, "dragonfire");
         }
 
@@ -600,8 +599,8 @@ public class AttackStyleMapping
         // Spot: WYRM_RANGE_PROJ=1634
         for (int id : eNPC.WYRM)
         {
-            registerDirectAttack(id, AnimationID.WYRM_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.WYRM_ATTACK_MAGIC, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.WYRM_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.WYRM_ATTACK_MAGIC, "magic", 1);
             registerProjectile  (id, SpotanimID.WYRM_RANGE_PROJ, "ranged");
         }
 
@@ -613,8 +612,8 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.WYVERN_SKELETON_BITE, "melee", 1);
-                registerDirectAttack(id, AnimationID.WYVERN_SKELETON_TAIL_SWIPE, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.WYVERN_SKELETON_BITE, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.WYVERN_SKELETON_TAIL_SWIPE, "melee", 1);
                 registerProjectile  (id, SpotanimID.WYVERN_SKELETON_LAUNCH_ICEBALL,  "magic");
                 registerProjectile  (id, SpotanimID.WYVERN_SKELETON_TRAVEL_ICEBALL,  "magic");
                 registerProjectile  (id, SpotanimID.WYVERN_SKELETON_TRAVEL_BREATH,  "magic");
@@ -628,7 +627,7 @@ public class AttackStyleMapping
         // Spot: BASILISK_KNIGHT_MAGIC_TRAVEL=1735, BASILISK_KNIGHT_ENTOMB_TRAVEL=1744
         for (int id : eNPC.BASILISK_KNIGHT)
         {
-            registerDirectAttack(id, AnimationID.BASILISK_KNIGHT_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.BASILISK_KNIGHT_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.BASILISK_KNIGHT_MAGIC_TRAVEL, "magic");
             registerMechanic    (id, SpotanimID.BASILISK_KNIGHT_ENTOMB_TRAVEL, "entomb");
         }
@@ -638,7 +637,7 @@ public class AttackStyleMapping
         // Spot: JORMUNGAND_MAGIC_TRAVEL=1737, JORMUNGAND_ENTOMB_PROJ=1742
         for (int id : eNPC.THE_JORMUNGAND)
         {
-            registerDirectAttack(id, AnimationID.JORMUNGAND_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.JORMUNGAND_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.JORMUNGAND_MAGIC_TRAVEL, "magic");
             registerMechanic    (id, SpotanimID.JORMUNGAND_ENTOMB_PROJ, "entomb");
         }
@@ -656,7 +655,7 @@ public class AttackStyleMapping
         // Spot: HESPORI_MAGIC_PROJ=1640, HESPORI_RANGE_PROJ=1639, HESPORI_VINE_PROJ=1642
         for (int id : eNPC.HESPORI)
         {
-            registerDirectAttack(id, AnimationID.HESPORI_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.HESPORI_ATTACK_RANGED, "ranged", 1);
             registerProjectile  (id, SpotanimID.HESPORI_RANGE_PROJ, "ranged");
             registerProjectile  (id, SpotanimID.HESPORI_MAGIC_PROJ, "magic");
             registerMechanic    (id, AnimationID.HESPORI_ATTACK_SPECIAL, "vines");
@@ -668,7 +667,7 @@ public class AttackStyleMapping
         // Spot: CRYSTAL_DARK_BEAST_RANGE_TRAVEL=1705
         for (int id : eNPC.DARK_BEAST)
         {
-            registerDirectAttack(id, AnimationID.DARK_BEAST_UPDATE_ATTACK, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.DARK_BEAST_UPDATE_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.CRYSTAL_DARK_BEAST_RANGE_TRAVEL, "ranged");
             registerProjectile  (id, SpotanimID.CRYSTAL_DARK_BEAST_RANGE_TRAVEL_HM, "ranged"); // HM version
         }
@@ -685,8 +684,8 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.BLOODVELD_ATTACK, "magic", 1);
-                registerDirectAttack(id, AnimationID.BLOODVELD_ATTACK_MOVE, "magic", 1);
+                registerScheduledDirectAttack(id, AnimationID.BLOODVELD_ATTACK, "magic", 1);
+                registerScheduledDirectAttack(id, AnimationID.BLOODVELD_ATTACK_MOVE, "magic", 1);
             }
         }
 
@@ -698,7 +697,7 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.JELLY_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.JELLY_ATTACK, "melee", 1);
             }
         }
 
@@ -706,20 +705,20 @@ public class AttackStyleMapping
         // Anim: PYREFIEND_ATTACK=1582, PYREFIEND_CASTING=7820
         for (int id : eNPC.PYREFIEND)
         {
-            registerDirectAttack(id, AnimationID.PYREFIEND_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.PYREFIEND_CASTING, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.PYREFIEND_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.PYREFIEND_CASTING, "magic", 1);
         }
 
         // Banshees — melee scream
-        for (int id : eNPC.BANSHEE)           { registerDirectAttack(id, AnimationID.BANSHEE_ATTACK, "melee", 1); }
-        for (int id : eNPC.SCREAMING_BANSHEE) { registerDirectAttack(id, AnimationID.SCREAMING_BANSHEE_ATTACK, "melee", 1); }
+        for (int id : eNPC.BANSHEE)           { registerScheduledDirectAttack(id, AnimationID.BANSHEE_ATTACK, "melee", 1); }
+        for (int id : eNPC.SCREAMING_BANSHEE) { registerScheduledDirectAttack(id, AnimationID.SCREAMING_BANSHEE_ATTACK, "melee", 1); }
 
         // Torcher — melee + fireball projectile
         // Anim: TORCHER_ATTACK=3882
         // Spot: TORCHER_FIREBALL_TRAVEL_SPOTANIM=647
         for (int id : eNPC.TORCHER)
         {
-            registerDirectAttack(id, AnimationID.TORCHER_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.TORCHER_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.TORCHER_FIREBALL_LAUNCH_SPOTANIM,  "magic");
             registerProjectile  (id, SpotanimID.TORCHER_FIREBALL_TRAVEL_SPOTANIM,  "magic");
         }
@@ -733,8 +732,8 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.NPC_STRYKEWYRM_LAVA01_MELEE01, "melee",  1);
-                registerDirectAttack(id, AnimationID.NPC_STRYKEWYRM_LAVA01_RANGE01, "ranged", 1);
+                registerScheduledDirectAttack(id, AnimationID.NPC_STRYKEWYRM_LAVA01_MELEE01, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.NPC_STRYKEWYRM_LAVA01_RANGE01, "ranged", 1);
                 registerMechanic    (id, AnimationID.NPC_STRYKEWYRM_LAVA01_BURROW_ATTACK01, "burrow");
                 registerMechanic    (id, AnimationID.NPC_STRYKEWYRM_LAVA01_BURROW_ATTACK02, "burrow");
                 registerMechanic    (id, AnimationID.NPC_STRYKEWYRM_LAVA01_BURROW_ATTACK03, "burrow");
@@ -745,8 +744,8 @@ public class AttackStyleMapping
         // Anim: SLAYER_AQUANITE_ATTACK=13637, SLAYER_SUP_AQUANITE_ATTACK=13644
         for (int id : eNPC.ELDER_AQUANITE)
         {
-            registerDirectAttack(id, AnimationID.SLAYER_AQUANITE_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.SLAYER_SUP_AQUANITE_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SLAYER_AQUANITE_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SLAYER_SUP_AQUANITE_ATTACK, "melee", 1);
         }
 
         // ===================================================================
@@ -760,14 +759,14 @@ public class AttackStyleMapping
                 eNPC.BRUTAL_BLACK_DRAGON, eNPC.BRUTAL_BLUE_DRAGON,
                 eNPC.BRUTAL_GREEN_DRAGON, eNPC.BRUTAL_RED_DRAGON})
         {
-            for (int id : group) { registerDirectAttack(id, AnimationID.BDRAG_ATTACK, "melee", 1); }
+            for (int id : group) { registerScheduledDirectAttack(id, AnimationID.BDRAG_ATTACK, "melee", 1); }
         }
 
         // Adamant Dragon — melee + poison ball
         // Spot: ADAMANT_DRAGON_POISONBALL=1486
         for (int id : eNPC.ADAMANT_DRAGON)
         {
-            registerDirectAttack(id, AnimationID.BDRAG_ATTACK,   "melee",      1);
+            registerScheduledDirectAttack(id, AnimationID.BDRAG_ATTACK,   "melee",      1);
             registerProjectile  (id, SpotanimID.ADAMANT_DRAGON_POISONBALL, "dragonfire");
         }
 
@@ -775,7 +774,7 @@ public class AttackStyleMapping
         // Spot: RUNE_DRAGON_ELECTOVORTEX=1488
         for (int id : eNPC.RUNE_DRAGON)
         {
-            registerDirectAttack(id, AnimationID.BDRAG_ATTACK,   "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BDRAG_ATTACK,   "melee", 1);
             registerProjectile  (id, SpotanimID.RUNE_DRAGON_ELECTOVORTEX, "magic");
         }
 
@@ -789,10 +788,10 @@ public class AttackStyleMapping
         //       SIRE_ATTACK_MIASMA=4531 (mechanic)
         for (int id : eNPC.ABYSSAL_SIRE)
         {
-            registerDirectAttack(id, AnimationID.SIRE_RIGHT_HOOK, "melee", 1);
-            registerDirectAttack(id, AnimationID.SIRE_ATTACK_RIGHT_WHIP, "melee", 1);
-            registerDirectAttack(id, AnimationID.SIRE_ATTACK_DOUBLE_HOOK, "melee", 1);
-            registerDirectAttack(id, AnimationID.SIRE_ATTACK_DOUBLE_WHIPS, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SIRE_RIGHT_HOOK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SIRE_ATTACK_RIGHT_WHIP, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SIRE_ATTACK_DOUBLE_HOOK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.SIRE_ATTACK_DOUBLE_WHIPS, "melee", 1);
             registerMechanic    (id, AnimationID.SIRE_ATTACK_MIASMA, "miasma");
             registerMechanic    (id, AnimationID.SIRE_ATTACK_MIASMA_TWO, "miasma");
         }
@@ -802,7 +801,7 @@ public class AttackStyleMapping
         // Spot: CORP_SPIRIT_BEAST_STRONG_PROJ=316, _MID=315, _WEAK=314, CORP_GROUND_STOMP=318
         for (int id : eNPC.CORPOREAL_BEAST)
         {
-            registerDirectAttack(id, AnimationID.CORP_DOUBLE_STOMP, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.CORP_DOUBLE_STOMP, "melee", 1);
             registerProjectile  (id, SpotanimID.CORP_SPIRIT_BEAST_WEAK_PROJ,  "magic");
             registerProjectile  (id, SpotanimID.CORP_SPIRIT_BEAST_MID_PROJ,  "magic");
             registerProjectile  (id, SpotanimID.CORP_SPIRIT_BEAST_STRONG_PROJ,  "magic");
@@ -814,10 +813,10 @@ public class AttackStyleMapping
         //       KALPHITE_QUEEN_RANGED_ATTACK=1250, KALPHITE_QUEEN_LIGHTNING=1170
         for (int id : eNPC.KALPHITE_QUEEN)
         {
-            registerDirectAttack(id, AnimationID.KALPHITE_QUEEN_ATTACK_MANDIBLES, "melee",  1);
-            registerDirectAttack(id, AnimationID.KALPHITE_QUEEN_ATTACK_CLAWS, "melee",  1);
-            registerDirectAttack(id, AnimationID.KALPHITE_QUEEN_RANGED_ATTACK, "ranged", 1);
-            registerDirectAttack(id, AnimationID.KALPHITE_QUEEN_LIGHTNING, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.KALPHITE_QUEEN_ATTACK_MANDIBLES, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.KALPHITE_QUEEN_ATTACK_CLAWS, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.KALPHITE_QUEEN_RANGED_ATTACK, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.KALPHITE_QUEEN_LIGHTNING, "magic", 1);
         }
 
         // Demonic Gorilla — all 3 styles (prayer switch boss)
@@ -825,16 +824,16 @@ public class AttackStyleMapping
         //       DEMONIC_GORILLA_RANGE=7227, DEMONIC_GORILLA_SMASH_CHEST=7228
         for (int id : eNPC.DEMONIC_GORILLA)
         {
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_PUNCH, "melee",  1);
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_RANGE, "ranged", 1);
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_SMASH_CHEST, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_PUNCH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_RANGE, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_SMASH_CHEST, "melee", 1);
         }
         for (int id : eNPC.TORTURED_GORILLA) // shares animations
         {
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_PUNCH, "melee",  1);
-            registerDirectAttack(id, AnimationID.DEMONIC_GORILLA_RANGE, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_PUNCH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.DEMONIC_GORILLA_RANGE, "ranged", 1);
         }
 
         // Araxxor — melee (normal + enraged + slow) + ranged/magic projectiles + acid mechanic
@@ -842,9 +841,9 @@ public class AttackStyleMapping
         // Spot: ARAXXOR_RANGED_PROJECTILE=1621, ARAXXOR_MAGIC_PROJECTILE=1622
         for (int id : eNPC.ARAXXOR_IN_COMBAT)
         {
-            registerDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_MELEE_01, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_SLOW_MELEE_01, "melee",  1);
-            registerDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_MELEE_ENRAGED_01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_MELEE_01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_SLOW_MELEE_01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_ARAXXOR_01_ATTACK_MELEE_ENRAGED_01, "melee", 1);
             registerProjectile  (id, SpotanimID.ARAXXOR_RANGED_PROJECTILE,  "ranged");
             registerProjectile  (id, SpotanimID.ARAXXOR_MAGIC_PROJECTILE,  "magic");
             registerMechanic    (id, AnimationID.NPC_ARAXXOR_01_ATTACK_ACID_LEAK_01, "acid");
@@ -856,7 +855,7 @@ public class AttackStyleMapping
         // Spot: PROJECTILE_MUSPAH_ATTACK_MAGIC_01=2327, _RANGED_01=2329
         for (int id : eNPC.PHANTOM_MUSPAH)
         {
-            registerDirectAttack(id, AnimationID.NPC_MUSPAH_ATTACK_MELEE_01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_MUSPAH_ATTACK_MELEE_01, "melee", 1);
             registerProjectile  (id, SpotanimID.PROJECTILE_MUSPAH_ATTACK_MAGIC_01, "magic");
             registerProjectile  (id, SpotanimID.PROJECTILE_MUSPAH_ATTACK_RANGED_01, "ranged");
             registerMechanic    (id, AnimationID.NPC_MUSPAH_ATTACK_SUMMON_01, "summon");
@@ -874,7 +873,7 @@ public class AttackStyleMapping
         // Spot: CRYSTAL_HUNLLEF_MAGIC_TRAVEL=1707/1708, _RANGE_TRAVEL=1711/1712
         for (int id : eNPC.CRYSTALLINE_HUNLLEF)
         {
-            registerDirectAttack(id, AnimationID.HUNLLEF_ATTACK_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.HUNLLEF_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_MAGIC_TRAVEL, "magic");
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_RANGE_TRAVEL, "ranged");
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL, "ranged"); // prayer travel
@@ -882,7 +881,7 @@ public class AttackStyleMapping
         }
         for (int id : eNPC.CORRUPTED_HUNLLEF)
         {
-            registerDirectAttack(id, AnimationID.HUNLLEF_ATTACK_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.HUNLLEF_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_MAGIC_TRAVEL_HM, "magic");
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_RANGE_TRAVEL_HM, "ranged");
             registerProjectile  (id, SpotanimID.CRYSTAL_HUNLLEF_PRAYER_TRAVEL_HM, "ranged");
@@ -893,16 +892,16 @@ public class AttackStyleMapping
         // Anim: BRAIN_BARRELCHEST_NORMAL_ATTACK=5894, BRAIN_BARRELCHEST_SPECIAL_ATTACK=5895
         for (int id : eNPC.BARRELCHEST)
         {
-            registerDirectAttack(id, AnimationID.BRAIN_BARRELCHEST_NORMAL_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.BRAIN_BARRELCHEST_SPECIAL_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BRAIN_BARRELCHEST_NORMAL_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BRAIN_BARRELCHEST_SPECIAL_ATTACK, "melee", 1);
         }
 
         // Dharok the Wretched (Barrows)
         // Anim: BARROW_DHAROK_SLASH=2066, BARROW_DHAROK_CRUSH=2067
         for (int id : eNPC.DHAROK_THE_WRETCHED)
         {
-            registerDirectAttack(id, AnimationID.BARROW_DHAROK_SLASH, "melee", 1);
-            registerDirectAttack(id, AnimationID.BARROW_DHAROK_CRUSH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BARROW_DHAROK_SLASH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BARROW_DHAROK_CRUSH, "melee", 1);
         }
 
         // Penance Queen (Barbarian Assault)
@@ -910,7 +909,7 @@ public class AttackStyleMapping
         // Spot: BARBASSAULT_PENANCE_QUEEN_RANGE_ATTACK_TRAVEL=871
         for (int id : eNPC.PENANCE_QUEEN)
         {
-            registerDirectAttack(id, AnimationID.BARBASSAULT_PENANCE_QUEEN_ATTACK, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.BARBASSAULT_PENANCE_QUEEN_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.BARBASSAULT_PENANCE_QUEEN_RANGE_ATTACK_TRAVEL,  "ranged");
         }
 
@@ -919,44 +918,63 @@ public class AttackStyleMapping
         // Spot: GRIM_EXPERIMENT_NO2_PROJECTILE_ANIM=1078
         for (int id : eNPC.EXPERIMENT_NO_2)
         {
-            registerDirectAttack(id, AnimationID.GRIM_EXPERIMENT_NO2_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GRIM_EXPERIMENT_NO2_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.GRIM_EXPERIMENT_NO2_PROJECTILE_ANIM, "magic");
         }
 
         // Headless Beast (A Taste of Hope)
         // Anim: BEAR_HEADLESS_BEAST_ATTACK=2267, BEAR_HEADLESS_BEAST_STOMP=8835
-        for (int id : eNPC.HEADLESS_BEAST)      { registerDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_ATTACK, "melee", 1); registerDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_STOMP, "melee", 1); }
-        for (int id : eNPC.HEADLESS_BEAST_HARD) { registerDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_ATTACK, "melee", 1); registerDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_STOMP, "melee", 1); }
+        for (int id : eNPC.HEADLESS_BEAST)
+        {
+            registerScheduledDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_STOMP, "melee", 1); }
+        for (int id : eNPC.HEADLESS_BEAST_HARD)
+        {
+            registerScheduledDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.BEAR_HEADLESS_BEAST_STOMP, "melee", 1); }
 
         // Agrith-Naar (Shadow of the Storm)
         // Anim: AGRITH_NANA_ATTACK=3501
         // Spot: AGRITH_NANA_RANGED=600
-        for (int id : eNPC.AGRITH_NAAR)      { registerDirectAttack(id, AnimationID.AGRITH_NANA_ATTACK, "melee", 1); registerProjectile(id, SpotanimID.AGRITH_NANA_RANGED, "magic"); }
-        for (int id : eNPC.AGRITH_NAAR_HARD) { registerDirectAttack(id, AnimationID.AGRITH_NANA_ATTACK, "melee", 1); registerProjectile(id, SpotanimID.AGRITH_NANA_RANGED, "magic"); }
+        for (int id : eNPC.AGRITH_NAAR)
+        {
+            registerScheduledDirectAttack(id, AnimationID.AGRITH_NANA_ATTACK, "melee", 1);
+            registerProjectile(id, SpotanimID.AGRITH_NANA_RANGED, "magic"); }
+        for (int id : eNPC.AGRITH_NAAR_HARD)
+        {
+            registerScheduledDirectAttack(id, AnimationID.AGRITH_NANA_ATTACK, "melee", 1);
+            registerProjectile(id, SpotanimID.AGRITH_NANA_RANGED, "magic"); }
 
         // Dessourt (Desert Treasure I)
         // Anim: DESSOURT_MELEE_ATTACK=3508, DESSOURT_TOT_ATTACK=3507
-        for (int id : eNPC.DESSOURT)      { registerDirectAttack(id, AnimationID.DESSOURT_TOT_ATTACK, "melee", 1); registerDirectAttack(id, AnimationID.DESSOURT_MELEE_ATTACK, "melee", 1); }
-        for (int id : eNPC.DESSOURT_HARD) { registerDirectAttack(id, AnimationID.DESSOURT_TOT_ATTACK, "melee", 1); registerDirectAttack(id, AnimationID.DESSOURT_MELEE_ATTACK, "melee", 1); }
+        for (int id : eNPC.DESSOURT)
+        {
+            registerScheduledDirectAttack(id, AnimationID.DESSOURT_TOT_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.DESSOURT_MELEE_ATTACK, "melee", 1); }
+        for (int id : eNPC.DESSOURT_HARD)
+        {
+            registerScheduledDirectAttack(id, AnimationID.DESSOURT_TOT_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.DESSOURT_MELEE_ATTACK, "melee", 1);
+        }
 
         // Chaos Elemental (Wilderness)
         // Anim: CHAOSELEMENTAL_ATTACK=3146, CHAOSELEMENTAL_CASTING=3149,
         //       CHAOSELEMENTAL_DISCORD_CASTING=3154, CHAOSELEMENTAL_MADNESS_CASTING=3150
         for (int id : eNPC.CHAOS_ELEMENTAL)
         {
-            registerDirectAttack(id, AnimationID.CHAOSELEMENTAL_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.CHAOSELEMENTAL_CASTING, "magic", 1);
-            registerDirectAttack(id, AnimationID.CHAOSELEMENTAL_MADNESS_CASTING, "magic", 1);
-            registerDirectAttack(id, AnimationID.CHAOSELEMENTAL_DISCORD_CASTING, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.CHAOSELEMENTAL_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.CHAOSELEMENTAL_CASTING, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.CHAOSELEMENTAL_MADNESS_CASTING, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.CHAOSELEMENTAL_DISCORD_CASTING, "magic", 1);
         }
 
         // Demonic Gorilla / Kruk (Monkey Madness II)
         // Anim: KRUK_TORTURED_APE_PUNCH=7239, _MAGIC=7238, _RANGE=7240
         for (int id : eNPC.KRUK)
         {
-            registerDirectAttack(id, AnimationID.KRUK_TORTURED_APE_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.KRUK_TORTURED_APE_PUNCH, "melee",  1);
-            registerDirectAttack(id, AnimationID.KRUK_TORTURED_APE_RANGE, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.KRUK_TORTURED_APE_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.KRUK_TORTURED_APE_PUNCH, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.KRUK_TORTURED_APE_RANGE, "ranged", 1);
         }
 
         // The Inadequacy (Dream Mentor)
@@ -965,11 +983,11 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_FRONT, "melee",  1);
-                registerDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_BACK, "melee",  1);
-                registerDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_LEFT, "melee",  1);
-                registerDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_RIGHT, "melee",  1);
-                registerDirectAttack(id, AnimationID.DREAM_INADEQUACY_RANGED_ATTACK, "ranged", 1);
+                registerScheduledDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_FRONT, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_BACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_LEFT, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.DREAM_INADEQUACY_ATTACK_RIGHT, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.DREAM_INADEQUACY_RANGED_ATTACK, "ranged", 1);
             }
         }
 
@@ -980,8 +998,8 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.SCARAB_ATTACK, "melee",  1);
-                registerDirectAttack(id, AnimationID.NPC_SCARAB_ATTACK, "melee",  1);
+                registerScheduledDirectAttack(id, AnimationID.SCARAB_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.NPC_SCARAB_ATTACK, "melee", 1);
                 registerProjectile  (id, SpotanimID.CONTACT_SCARAB_RANGED, "ranged");
                 registerProjectile  (id, SpotanimID.TOA_SCARAB_RANGED_PROJECTILE01, "ranged");
             }
@@ -993,32 +1011,32 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.MYARM_ROC_FLAP_ATTACK, "melee",  1);
-                registerDirectAttack(id, AnimationID.MYARM_ROC_PECK_ATTACK, "melee",  1);
-                registerDirectAttack(id, AnimationID.MYARM_ROC_ROCK_ATTACK, "ranged", 1);
+                registerScheduledDirectAttack(id, AnimationID.MYARM_ROC_FLAP_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.MYARM_ROC_PECK_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.MYARM_ROC_ROCK_ATTACK, "ranged", 1);
             }
         }
 
         // Sea Troll Queen (Slug Menace)
         // Anim: SWAN_SEATROLL_ATTACK=3985
-        for (int id : eNPC.SEA_TROLL_QUEEN) { registerDirectAttack(id, AnimationID.SWAN_SEATROLL_ATTACK, "melee", 1); }
+        for (int id : eNPC.SEA_TROLL_QUEEN) { registerScheduledDirectAttack(id, AnimationID.SWAN_SEATROLL_ATTACK, "melee", 1); }
 
         // Giant Sea Snake (Royal Trouble)
         // Anim: ROYAL_SEA_SNAKE_ATTACK=3538, ROYAL_SEA_SNAKE_MOTHER_RANGED_ATTACK=4041
         for (int id : eNPC.GIANT_SEA_SNAKE)
         {
-            registerDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_ATTACK, "melee",  1);
-            registerDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_RANGED_ATTACK, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_RANGED_ATTACK, "ranged", 1);
         }
         for (int id : eNPC.MOTHER) // Sea Snake Mother
         {
-            registerDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_ATTACK, "melee",  1);
-            registerDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_RANGED_ATTACK, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.ROYAL_SEA_SNAKE_MOTHER_RANGED_ATTACK, "ranged", 1);
         }
 
         // Mutant Tarn (Lair of Tarn Razorlor)
         // Anim: LOTR_TARN_RAZORLOR_MUTANT_ATTACK=5617
-        for (int id : eNPC.MUTANT_TARN) { registerDirectAttack(id, AnimationID.LOTR_TARN_RAZORLOR_MUTANT_ATTACK, "melee", 1); }
+        for (int id : eNPC.MUTANT_TARN) { registerScheduledDirectAttack(id, AnimationID.LOTR_TARN_RAZORLOR_MUTANT_ATTACK, "melee", 1); }
 
         // Galvek, Elvarg handled above.
 
@@ -1026,8 +1044,8 @@ public class AttackStyleMapping
         // Anim: KILLERWATT_BIPED_ATTACK=3163, KILLERWATT_BIPED_CAST=3164
         for (int id : eNPC.KILLERWATT)
         {
-            registerDirectAttack(id, AnimationID.KILLERWATT_BIPED_ATTACK, "melee", 1);
-            registerDirectAttack(id, AnimationID.KILLERWATT_BIPED_CAST, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.KILLERWATT_BIPED_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.KILLERWATT_BIPED_CAST, "magic", 1);
         }
 
         // Abomination (A Porcine of Interest quest)
@@ -1035,7 +1053,7 @@ public class AttackStyleMapping
         // Spot: MYQ4_ABOMINATION_PROJ_TRAVEL=1533
         for (int id : eNPC.ABOMINATION)
         {
-            registerDirectAttack(id, AnimationID.MYQ4_ABOMINATION_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.MYQ4_ABOMINATION_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.MYQ4_ABOMINATION_PROJ_TRAVEL, "ranged");
         }
 
@@ -1044,7 +1062,7 @@ public class AttackStyleMapping
         // Spot: SOURHOG_SPIT_TRAVEL=1817
         for (int id : eNPC.SOURHOG)
         {
-            registerDirectAttack(id, AnimationID.SOURHOG_ATTACK_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.SOURHOG_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.SOURHOG_SPIT_TRAVEL, "ranged");
         }
 
@@ -1052,16 +1070,16 @@ public class AttackStyleMapping
         // Anim: ABYSSAL_SCION_ATTACK_MELEE=7126, ABYSSAL_SCION_ATTACK_RANGED=7127
         for (int id : eNPC.SCION)
         {
-            registerDirectAttack(id, AnimationID.ABYSSAL_SCION_ATTACK_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.ABYSSAL_SCION_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.ABYSSAL_SCION_ATTACK_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.ABYSSAL_SCION_ATTACK_RANGED, "ranged", 1);
         }
 
         // The Mimic (Elite Clue)
         // Anim: MIMIC_MELEE=8308, MIMIC_CHARGE_RANGED=8309
         for (int id : eNPC.THE_MIMIC)
         {
-            registerDirectAttack(id, AnimationID.MIMIC_MELEE, "melee",  1);
-            registerDirectAttack(id, AnimationID.MIMIC_CHARGE_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.MIMIC_MELEE, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.MIMIC_CHARGE_RANGED, "ranged", 1);
         }
 
         // Judge of Yama / Yama (Fort Forinthry)
@@ -1069,12 +1087,12 @@ public class AttackStyleMapping
         // Spot: VFX_NPC_YAMA_MAGIC_FIRE_SPOTANIM01=3246, _SHADOW=3243
         for (int id : eNPC.JUDGE_OF_YAMA)
         {
-            registerDirectAttack(id, AnimationID.JUDGEOFYAMA_ATTACK, "melee",  1);
-            registerDirectAttack(id, AnimationID.JUDGEOFYAMA_ATTACK_SLOW,"melee",  1); // JUDGEOFYAMA_ATTACK_SLOW
+            registerScheduledDirectAttack(id, AnimationID.JUDGEOFYAMA_ATTACK, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.JUDGEOFYAMA_ATTACK_SLOW,"melee", 1); // JUDGEOFYAMA_ATTACK_SLOW
         }
         for (int id : eNPC.YAMA)
         {
-            registerDirectAttack(id, AnimationID.NPC_YAMA01_MELEE01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_YAMA01_MELEE01, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_NPC_YAMA_MAGIC_SHADOW_SPOTANIM01,  "magic");
             registerProjectile  (id, SpotanimID.VFX_NPC_YAMA_MAGIC_FIRE_SPOTANIM01,  "magic");
             registerMechanic    (id, SpotanimID.VFX_YAMA_SHADOW_SPIKE_PROJECTILE_01,  "spike");
@@ -1091,7 +1109,7 @@ public class AttackStyleMapping
         // Spot: AMOXLIATL_ATTACK_PROJ=2934, VFX_AMOXLIATL_ICE_BLOCK_PROJECTILE_01=2936
         for (int id : eNPC.AMOXLIATL)
         {
-            registerDirectAttack(id, AnimationID.AMOXLIATL_ATTACK, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.AMOXLIATL_ATTACK, "melee", 1);
             registerProjectile  (id, SpotanimID.AMOXLIATL_ATTACK_PROJ,  "magic");
             registerProjectile  (id, SpotanimID.VFX_AMOXLIATL_ICE_BLOCK_PROJECTILE_01,  "magic");
             registerMechanic    (id, AnimationID.AMOXLIATL_SUMMON, "summon");
@@ -1101,9 +1119,9 @@ public class AttackStyleMapping
         // Anim: GRYPHON_BOSS_MELEE_ATTACK01=12552, GRYPHON_BOSS_RANGED01=12554, GRYPHON_BOSS_SPIT01=12553
         for (int id : eNPC.SHELLBANE_GRYPHON)
         {
-            registerDirectAttack(id, AnimationID.GRYPHON_BOSS_MELEE_ATTACK01, "melee",  1);
-            registerDirectAttack(id, AnimationID.GRYPHON_BOSS_RANGED01, "ranged", 1);
-            registerDirectAttack(id, AnimationID.GRYPHON_BOSS_SPIT01, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.GRYPHON_BOSS_MELEE_ATTACK01, "melee", 1);
+            registerScheduledDirectAttack(id, AnimationID.GRYPHON_BOSS_RANGED01, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.GRYPHON_BOSS_SPIT01, "magic", 1);
         }
 
         // Branda the Fire Queen
@@ -1111,7 +1129,7 @@ public class AttackStyleMapping
         // Spot: VFX_FIRE_GIANT_BRANDA_QUEEN_ATTACK_AOE_PROJ01=3209
         for (int id : eNPC.BRANDA_THE_FIRE_QUEEN)
         {
-            registerDirectAttack(id, AnimationID.FIRE_GIANT_BRANDA_QUEEN_ATTACK_MELEE01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.FIRE_GIANT_BRANDA_QUEEN_ATTACK_MELEE01, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_FIRE_GIANT_BRANDA_QUEEN_ATTACK_AOE_PROJ01,  "magic");
             registerMechanic    (id, AnimationID.FIRE_GIANT_BRANDA_QUEEN_ATTACK_SUMMON01, "summon");
         }
@@ -1121,7 +1139,7 @@ public class AttackStyleMapping
         // Spot: VFX_ICE_GIANT_ELDRIC_KING_ATTACK_AOE_PROJ01=3210, _MELEE01_PROJ01=3211
         for (int id : eNPC.ELDRIC_THE_ICE_KING)
         {
-            registerDirectAttack(id, AnimationID.ICE_GIANT_ELDRIC_KING_ATTACK_MELEE01, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.ICE_GIANT_ELDRIC_KING_ATTACK_MELEE01, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_ICE_GIANT_ELDRIC_KING_ATTACK_AOE_PROJ01,  "magic");
             registerProjectile  (id, SpotanimID.VFX_ICE_GIANT_ELDRIC_KING_MELEE01_PROJ01,  "melee");
             registerMechanic    (id, AnimationID.ICE_GIANT_ELDRIC_KING_ATTACK_SUMMON01, "summon");
@@ -1132,7 +1150,7 @@ public class AttackStyleMapping
         // Spot: VFX_MANTICORE_01_PROJECTILE_MAGIC_01=2681, _RANGED_01=2683, _MELEE_01=2685
         for (int id : eNPC.MANTICORE)
         {
-            registerDirectAttack(id, AnimationID.NPC_MANTICORE_01_TRIPLE_CHARGE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_MANTICORE_01_TRIPLE_CHARGE, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_MANTICORE_01_PROJECTILE_MAGIC_01,  "magic");
             registerProjectile  (id, SpotanimID.VFX_MANTICORE_01_PROJECTILE_RANGED_01,  "ranged");
             registerProjectile  (id, SpotanimID.VFX_MANTICORE_01_PROJECTILE_MELEE_01,  "melee");
@@ -1143,7 +1161,7 @@ public class AttackStyleMapping
         // Spot: VFX_MINOTAUR_PROJECTILE_MAGIC_01=2950
         for (int id : eNPC.MINOTAUR)
         {
-            registerDirectAttack(id, AnimationID.NPC_MINOTAUR_BOSS_ATTACK_MELEE, "melee",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_MINOTAUR_BOSS_ATTACK_MELEE, "melee", 1);
             registerProjectile  (id, SpotanimID.VFX_MINOTAUR_PROJECTILE_MAGIC_01,  "magic");
         }
 
@@ -1155,9 +1173,9 @@ public class AttackStyleMapping
         // Anim: NPC_BALANCE_ELEMENTAL_WATER_ATTACK01=11342, _AIR_=11348, _FIRE_=11354
         for (int id : eNPC.BALANCE_ELEMENTAL)
         {
-            registerDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_WATER_ATTACK01, "magic",  1);
-            registerDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_AIR_ATTACK01, "ranged", 1);
-            registerDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_FIRE_ATTACK01, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_WATER_ATTACK01, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_AIR_ATTACK01, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.NPC_BALANCE_ELEMENTAL_FIRE_ATTACK01, "magic", 1);
             registerProjectile  (id, SpotanimID.VFX_BALANCE_ELEMENTAL_WATER_ATTACK01_PROJANIM,  "magic");
             registerProjectile  (id, SpotanimID.VFX_BALANCE_ELEMENTAL_FIRE_ATTACK01_PROJANIM,  "magic");
             registerProjectile  (id, SpotanimID.VFX_BALANCE_ELEMENTAL_AIR_ATTACK_SPECIAL01_PROJANIM,  "ranged");
@@ -1176,7 +1194,7 @@ public class AttackStyleMapping
         // Anim: ZYGOMITE_ATTACK=3326
         for (int[] group : new int[][]{eNPC.ZYGOMITE, eNPC.ANCIENT_ZYGOMITE})
         {
-            for (int id : group) { registerDirectAttack(id, AnimationID.ZYGOMITE_ATTACK, "melee", 1); }
+            for (int id : group) { registerScheduledDirectAttack(id, AnimationID.ZYGOMITE_ATTACK, "melee", 1); }
         }
 
         // Mutated Terrorbird / Warped Terrorbird
@@ -1185,8 +1203,8 @@ public class AttackStyleMapping
         {
             for (int id : group)
             {
-                registerDirectAttack(id, AnimationID.TERRORBIRD_ATTACK, "melee", 1);
-                registerDirectAttack(id, AnimationID.TERRORBIRD_MOUNTED_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.TERRORBIRD_ATTACK, "melee", 1);
+                registerScheduledDirectAttack(id, AnimationID.TERRORBIRD_MOUNTED_ATTACK, "melee", 1);
             }
         }
 
@@ -1194,14 +1212,14 @@ public class AttackStyleMapping
         // Anim: HYDRA_STAGE_1_ATTACK_RANGED=8235, _MAGIC=8236 ... (stages 1-4)
         for (int id : eNPC.HYDRA)
         {
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_1_ATTACK_RANGED, "ranged", 1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_1_ATTACK_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_2_ATTACK_RANGED, "ranged", 1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_2_ATTACK_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_3_ATTACK_RANGED, "ranged", 1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_3_ATTACK_MAGIC, "magic",  1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_4_ATTACK_RANGED, "ranged", 1);
-            registerDirectAttack(id, AnimationID.HYDRA_STAGE_4_ATTACK_MAGIC, "magic",  1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_1_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_1_ATTACK_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_2_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_2_ATTACK_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_3_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_3_ATTACK_MAGIC, "magic", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_4_ATTACK_RANGED, "ranged", 1);
+            registerScheduledDirectAttack(id, AnimationID.HYDRA_STAGE_4_ATTACK_MAGIC, "magic", 1);
         }
 
         // Dessout (Slayer) same entry as quest version — already registered above.
@@ -1226,14 +1244,14 @@ public class AttackStyleMapping
     private static void registerJad(int id)
     {
         // JALTOKJAD_ATTACK_MELEE=7590, _MAGIC=7592, _RANGED=7593
-        registerDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_MELEE, "melee",  1);
-        registerDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_MAGIC, "magic",  2);
-        registerDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_RANGED, "ranged", 2);
+        registerScheduledDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_MELEE, "melee", 1);
+        registerScheduledDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_MAGIC, "magic", 1);
+        registerScheduledDirectAttack(id, AnimationID.JALTOKJAD_ATTACK_RANGED, "ranged", 1);
     }
 
     private static void registerMaiden(int id)
     {
-        registerDirectAttack(id, AnimationID.MAIDEN_ATTACK_BLOOD, "magic",  1); // MAIDEN_ATTACK_BLOOD
+        registerScheduledDirectAttack(id, AnimationID.MAIDEN_ATTACK_BLOOD, "magic", 1); // MAIDEN_ATTACK_BLOOD
         registerMechanic    (id, AnimationID.MAIDEN_ATTACK_SPECIAL, "spawns");    // MAIDEN_ATTACK_SPECIAL
     }
 
@@ -1251,7 +1269,7 @@ public class AttackStyleMapping
     private static void registerWarden(int id)
     {
         // NPC_WARDENS_MELEE01=9659
-        registerDirectAttack(id, AnimationID.NPC_WARDENS_MELEE01, "melee",  1);
+        registerScheduledDirectAttack(id, AnimationID.NPC_WARDENS_MELEE01, "melee", 1);
         // prayer attacks (each style can be melee/ranged/magic depending on which prayer they drain)
         registerProjectile  (id, SpotanimID.TOA_WARDENS_PRAYER_MELEE_TRAVEL, "melee");     // TOA_WARDENS_PRAYER_MELEE_TRAVEL
         registerProjectile  (id, SpotanimID.TOA_WARDENS_PRAYER_RANGED_TRAVEL, "ranged");    // TOA_WARDENS_PRAYER_RANGED_TRAVEL
@@ -1265,7 +1283,7 @@ public class AttackStyleMapping
     {
         // Anim: NIGHTMARE_ATTACK_MELEE=8594
         // Spot: NIGHTMARE_MAGIC_TRAVEL=1764, NIGHTMARE_RANGED_TRAVEL=1766
-        registerDirectAttack(id, AnimationID.NIGHTMARE_ATTACK_MELEE, "melee",   1);
+        registerScheduledDirectAttack(id, AnimationID.NIGHTMARE_ATTACK_MELEE, "melee",   1);
         registerProjectile  (id, SpotanimID.NIGHTMARE_MAGIC_TRAVEL, "magic");
         registerProjectile  (id, SpotanimID.NIGHTMARE_MAGIC_IMPACT, "magic");  // NIGHTMARE_MAGIC_IMPACT
         registerProjectile  (id, SpotanimID.NIGHTMARE_RANGED_TRAVEL, "ranged");
