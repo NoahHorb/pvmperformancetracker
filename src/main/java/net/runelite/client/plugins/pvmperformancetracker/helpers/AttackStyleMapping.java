@@ -40,6 +40,8 @@ public class AttackStyleMapping
     private static final Map<Integer, Map<Integer, String>> projectileMappings = new HashMap<>();
     private static final Map<Integer, Set<Integer>>         mechanicAnimations = new HashMap<>();
     private static final Map<Integer, Map<Integer, String>> mechanicStyles     = new HashMap<>();
+    private static final Map<Integer, Map<Integer, int[]>> linkedMechanicBossIds = new HashMap<>();
+    private static final Map<Integer, Map<Integer, String>> linkedMechanicStyles  = new HashMap<>();
 
     // -----------------------------------------------------------------------
     // Registration API
@@ -60,6 +62,24 @@ public class AttackStyleMapping
     public static void registerProjectile(int npcId, int projectileId, String attackStyle)
     {
         projectileMappings.computeIfAbsent(npcId, k -> new HashMap<>()).put(projectileId, attackStyle);
+    }
+
+    /**
+     * Register a mechanic that is animated by a SEPARATE sub-NPC rather than the boss itself.
+     *
+     * Example: Vardorvis axes — the axe NPC (not Vardorvis) fires animation 10365.
+     * When that animation fires, we need to flag a mechanic on Vardorvis's tracker entry,
+     * not on the axe NPC's entry — because resolveIncomingHit() is called with Vardorvis's index.
+     *
+     * @param subNpcId   The NPC ID of the sub-NPC that fires the animation (e.g. axe NPC)
+     * @param animId     The animation ID the sub-NPC plays
+     * @param style      The mechanic style string (e.g. "axes")
+     * @param bossNpcIds The boss NPC IDs that own this mechanic (e.g. eNPC.VARDORVIS)
+     */
+    public static void registerLinkedMechanic(int subNpcId, int animId, String style, int[] bossNpcIds)
+    {
+        linkedMechanicBossIds.computeIfAbsent(subNpcId, k -> new HashMap<>()).put(animId, bossNpcIds);
+        linkedMechanicStyles.computeIfAbsent(subNpcId, k -> new HashMap<>()).put(animId, style);
     }
 
     // -----------------------------------------------------------------------
@@ -104,12 +124,40 @@ public class AttackStyleMapping
         return map != null ? map.get(projectileId) : null;
     }
 
+    /** Returns true if the given sub-NPC animation is a linked mechanic. */
+    public static boolean isLinkedMechanicAnimation(int subNpcId, int animId)
+    {
+        Map<Integer, int[]> map = linkedMechanicBossIds.get(subNpcId);
+        return map != null && map.containsKey(animId);
+    }
+
+    /** Returns the boss NPC IDs that own this linked mechanic, or null. */
+    public static int[] getLinkedMechanicBossIds(int subNpcId, int animId)
+    {
+        Map<Integer, int[]> map = linkedMechanicBossIds.get(subNpcId);
+        return map != null ? map.get(animId) : null;
+    }
+
+    /** Returns the style string for a linked mechanic animation. */
+    public static String getLinkedMechanicStyle(int subNpcId, int animId)
+    {
+        Map<Integer, String> map = linkedMechanicStyles.get(subNpcId);
+        return map != null ? map.get(animId) : null;
+    }
+    /**
+     * Returns true if we have ANY mapping for this NPC ID —
+     * direct attacks, mechanics, projectiles, or linked mechanics.
+     * Used by AnimationListener to filter out irrelevant NPCs cheaply.
+     */
     public static boolean hasMappings(int npcId)
     {
         return animationMappings.containsKey(npcId)
                 || projectileMappings.containsKey(npcId)
-                || mechanicAnimations.containsKey(npcId);
+                || mechanicAnimations.containsKey(npcId)
+                || linkedMechanicBossIds.containsKey(npcId);  // <- add this line to existing hasMappings
     }
+
+
 
     // -----------------------------------------------------------------------
     // Boss mappings
@@ -133,6 +181,8 @@ public class AttackStyleMapping
             registerProjectile  (id, SpotanimID.VFX_VARDORVIS_HEAD_PROJECTILE_MAGIC_01,  "magic");
             registerProjectile  (id, SpotanimID.VFX_VARDORVIS_HEAD_PROJECTILE_RANGED_01,  "ranged");
 
+
+            registerLinkedMechanic(12225, AnimationID.NPC_VARDORVIS_AXE_01_ATTACK_START, "axes", eNPC.VARDORVIS);
         }
 
         // Duke Sucellus — melee + magic projectile + gaze mechanic + vents
@@ -1301,5 +1351,7 @@ public class AttackStyleMapping
         projectileMappings.clear();
         mechanicAnimations.clear();
         mechanicStyles.clear();
+        linkedMechanicBossIds.clear();
+        linkedMechanicStyles.clear();
     }
 }

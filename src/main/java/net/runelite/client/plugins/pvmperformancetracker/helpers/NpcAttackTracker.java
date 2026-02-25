@@ -159,9 +159,15 @@ public class NpcAttackTracker
 
     /**
      * Called when an NPC plays an animation.
-     * Routes to direct-attack scheduling or mechanic flagging based on registry.
+     * Routes to: linked-mechanic (sub-NPC), standard mechanic, or direct-attack scheduling.
+     *
+     * @param npc        The NPC that changed animation
+     * @param animationId The new animation ID
+     * @param bossFinder  Callback to find the current boss NPC by boss NPC ID —
+     *                    needed to resolve the boss's npcIndex for linked mechanics.
+     *                    Pass plugin::findBossNpc or similar.
      */
-    public void recordNpcAnimation(NPC npc, int animationId)
+    public void recordNpcAnimation(NPC npc, int animationId, BossFinder bossFinder)
     {
         if (npc == null)
         {
@@ -171,11 +177,44 @@ public class NpcAttackTracker
         int npcId    = npc.getId();
         int npcIndex = npc.getIndex();
 
-        // ---- Mechanic animation ----
+        // ---- 1. Linked mechanic — sub-NPC fires animation, mechanic owned by boss ----
+        if (AttackStyleMapping.isLinkedMechanicAnimation(npcId, animationId))
+        {
+            String style      = AttackStyleMapping.getLinkedMechanicStyle(npcId, animationId);
+            int[]  bossNpcIds = AttackStyleMapping.getLinkedMechanicBossIds(npcId, animationId);
+            int    expiryTick = currentTick + DEFAULT_MECHANIC_LIFESPAN_TICKS;
+
+            // Register the mechanic under the boss's npcIndex, not the sub-NPC's index.
+            // resolveIncomingHit() is always called with the boss's index.
+            if (bossNpcIds != null && bossFinder != null)
+            {
+                for (int bossNpcId : bossNpcIds)
+                {
+                    NPC bossNpc = bossFinder.findBoss(bossNpcId);
+                    if (bossNpc != null)
+                    {
+                        int bossIndex = bossNpc.getIndex();
+                        activeMechanics.add(new ActiveMechanic(bossIndex, style, currentTick, expiryTick));
+
+                        log.debug("[NpcAttackTracker] Linked mechanic spawned: subNpc={} (id={}) " +
+                                        "anim={} style={} → bossIndex={} expiryTick={}",
+                                npc.getName(), npcId, animationId, style, bossIndex, expiryTick);
+                    }
+                    else
+                    {
+                        log.debug("[NpcAttackTracker] Linked mechanic: bossNpcId={} not found in world " +
+                                "(sub-NPC: {} anim={})", bossNpcId, npc.getName(), animationId);
+                    }
+                }
+            }
+            return;
+        }
+
+        // ---- 2. Standard mechanic — boss itself fires a mechanic animation ----
         if (AttackStyleMapping.isMechanicAnimation(npcId, animationId))
         {
-            String style = AttackStyleMapping.getMechanicStyle(npcId, animationId);
-            int expiryTick = currentTick + DEFAULT_MECHANIC_LIFESPAN_TICKS;
+            String style      = AttackStyleMapping.getMechanicStyle(npcId, animationId);
+            int    expiryTick = currentTick + DEFAULT_MECHANIC_LIFESPAN_TICKS;
 
             activeMechanics.add(new ActiveMechanic(npcIndex, style, currentTick, expiryTick));
 
@@ -185,12 +224,12 @@ public class NpcAttackTracker
             return;
         }
 
-        // ---- Direct-attack animation ----
+        // ---- 3. Direct-attack animation ----
         if (AttackStyleMapping.isDirectAttackAnimation(npcId, animationId))
         {
-            String style     = AttackStyleMapping.getStyleFromAnimation(npcId, animationId);
-            int delay        = AttackStyleMapping.getDirectAttackDelay(npcId, animationId);
-            int expectedTick = currentTick + delay;
+            String style       = AttackStyleMapping.getStyleFromAnimation(npcId, animationId);
+            int    delay       = AttackStyleMapping.getDirectAttackDelay(npcId, animationId);
+            int    expectedTick = currentTick + delay;
 
             scheduledDirectHits.add(new ScheduledDirectHit(npcIndex, style, expectedTick));
 
@@ -351,5 +390,14 @@ public class NpcAttackTracker
         long mechCount   = activeMechanics.stream().filter(m -> m.npcIndex == npcIndex).count();
         log.debug("[NpcAttackTracker] State for npcIndex={} tick={}: directHits={} projectiles={} mechanics={}",
                 npcIndex, currentTick, directCount, projCount, mechCount);
+    }
+
+    /** Functional interface so NpcAttackTracker can look up boss NPCs by ID
+     *  without depending directly on Client or Plugin. */
+    @FunctionalInterface
+    public interface BossFinder
+    {
+        /** Find the first live NPC in the world with the given NPC ID, or null. */
+        NPC findBoss(int npcId);
     }
 }

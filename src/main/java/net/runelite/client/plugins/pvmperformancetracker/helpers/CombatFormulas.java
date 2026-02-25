@@ -223,7 +223,7 @@ public class CombatFormulas
         // Apply prayer reduction
         int effectiveMaxHit = (int) Math.floor(maxHit * prayerReduction);
         int effectiveMinHit = (int) Math.floor(minHit * prayerReduction);
-        log.debug("effective min hit {} max hit: {}", effectiveMinHit, effectiveMaxHit);
+        log.debug("effective min hit {} max hit: {}, CURRENT HP: {}", effectiveMinHit, effectiveMaxHit, currentHp);
         // If max hit can't kill player, no death risk
         if (effectiveMaxHit < currentHp)
         {
@@ -244,6 +244,7 @@ public class CombatFormulas
         int lethalHits = effectiveMaxHit - currentHp + 1;
 
         double lethalDamageChance = (double) lethalHits / possibleHits;
+        log.debug("caculated chance of death: {}", hitChance* lethalDamageChance);
         return hitChance * lethalDamageChance;
     }
 
@@ -275,7 +276,10 @@ public class CombatFormulas
         String normalizedStyle = attackStyle != null ? attackStyle.toLowerCase() : "";
 
         // Special cases where prayer doesn't work or has reduced effectiveness
-
+        if (normalizedStyle.contains("axes"))
+        {
+            return .5; // prayer protects about 50% of axe damage
+        }
         // Dragonfire attacks - prayer doesn't reduce dragonfire
         if (normalizedStyle.contains("dragonfire"))
         {
@@ -353,14 +357,14 @@ public class CombatFormulas
             accuracy =npcAttackRoll / (2.0 * (playerDefenceRoll + 1.0));
         }
         // DEBUG LOGGING
-        log.debug("=== Accuracy Calculation ===");
-        log.debug("npc Attack style: {}", attackStyle);
-        log.debug("npc attack roll: {}", npcAttackRoll);
-        log.debug("player  defence roll: {}", playerDefenceRoll);
-        log.debug("Accuracy: {} ({}%)",
-                String.format("%.4f", accuracy),
-                String.format("%.2f", accuracy * 100));
-        log.debug("============================");
+//        log.debug("=== Accuracy Calculation ===");
+//        log.debug("npc Attack style: {}", attackStyle);
+//        log.debug("npc attack roll: {}", npcAttackRoll);
+//        log.debug("player  defence roll: {}", playerDefenceRoll);
+//        log.debug("Accuracy: {} ({}%)",
+//                String.format("%.4f", accuracy),
+//                String.format("%.2f", accuracy * 100));
+//        log.debug("============================");
         return accuracy;
 
     }
@@ -448,15 +452,15 @@ public class CombatFormulas
         int attackRoll = (int) (effectiveLevel * (attackBonus + 64));
 
         // DEBUG LOGGING
-        log.debug("=== Attack Roll Calculation ===");
-        log.debug("Attack style: {}", attackStyle);
-        log.debug("Attack level: {}", attackLevel);
-        log.debug("Attack bonus: {}", attackBonus);
-        log.debug("Prayer multiplier: {}", String.format("%.2f", prayerMultiplier));
-        log.debug("Void multiplier: {}", String.format("%.2f", voidMultiplier));
-        log.debug("Effective level: {}", String.format("%.2f", effectiveLevel));
-        log.debug("Attack roll: {}", attackRoll);
-        log.debug("================================");
+//        log.debug("=== Attack Roll Calculation ===");
+//        log.debug("Attack style: {}", attackStyle);
+//        log.debug("Attack level: {}", attackLevel);
+//        log.debug("Attack bonus: {}", attackBonus);
+//        log.debug("Prayer multiplier: {}", String.format("%.2f", prayerMultiplier));
+//        log.debug("Void multiplier: {}", String.format("%.2f", voidMultiplier));
+//        log.debug("Effective level: {}", String.format("%.2f", effectiveLevel));
+//        log.debug("Attack roll: {}", attackRoll);
+//        log.debug("================================");
 
         return attackRoll;
     }
@@ -473,13 +477,13 @@ public class CombatFormulas
         int defenceRoll = effectiveDefence * (defenceBonus + 64);
 
         // DEBUG LOGGING
-        log.debug("=== NPC Defence Roll ===");
-        log.debug("NPC: {}", npcStats.getName());
-        log.debug("Defence level: {}", defenceLevel);
-        log.debug("Defence bonus ({}): {}", attackStyle, defenceBonus);
-        log.debug("Effective defence: {}", effectiveDefence);
-        log.debug("Defence roll: {}", defenceRoll);
-        log.debug("========================");
+//        log.debug("=== NPC Defence Roll ===");
+//        log.debug("NPC: {}", npcStats.getName());
+//        log.debug("Defence level: {}", defenceLevel);
+//        log.debug("Defence bonus ({}): {}", attackStyle, defenceBonus);
+//        log.debug("Effective defence: {}", effectiveDefence);
+//        log.debug("Defence roll: {}", defenceRoll);
+//        log.debug("========================");
 
         return defenceRoll;
     }
@@ -509,7 +513,7 @@ public class CombatFormulas
                 }
             }
         }
-        log.debug("Player strength bonus: {}", totalBonus);
+        //log.debug("Player strength bonus: {}", totalBonus);
         return totalBonus;
     }
 
@@ -610,7 +614,7 @@ public class CombatFormulas
                 }
             }
         }
-        log.debug("Player {} attack bonus: {}", attackStyle, totalBonus);
+        //log.debug("Player {} attack bonus: {}", attackStyle, totalBonus);
         return totalBonus;
     }
 

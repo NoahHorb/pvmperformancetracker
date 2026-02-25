@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.AnimationChanged;
 import net.runelite.client.plugins.pvmperformancetracker.PvMPerformanceTrackerPlugin;
+import net.runelite.client.plugins.pvmperformancetracker.helpers.AttackStyleMapping;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.FightTracker;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.PlayerAttackStyleHelper;
 import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
@@ -129,24 +130,19 @@ public class AnimationListener
 
     /**
      * Handle NPC animation changes.
-     * Routes to NpcAttackTracker which handles both direct attacks and mechanics.
+     * Only processes NPCs that have registrations in AttackStyleMapping —
+     * this naturally covers both the boss NPC and any sub-NPCs (e.g. axe throwers)
+     * without needing to hardcode which NPCs are "in" a given fight.
      */
     private void handleNpcAnimation(NPC npc)
     {
         FightTracker fightTracker = plugin.getFightTracker();
 
-        // Only track if there's an active fight
+        // No active fight — NPC animations don't start fights, only player attacks do.
         if (fightTracker == null || !fightTracker.hasActiveFight())
         {
             return;
         }
-
-        // Only track the boss we're fighting
-//        int currentBossId = fightTracker.getCurrentFight().getBossNpcId();
-//        if (npc.getId() != currentBossId)
-//        {
-//            return;
-//        }
 
         int animationId = npc.getAnimation();
         if (animationId == -1)
@@ -158,7 +154,21 @@ public class AnimationListener
         {
             log.debug("[AnimationListener] NPC animation: npc={} (id={} index={}) anim={}",
                     npc.getName(), npc.getId(), npc.getIndex(), animationId);
-            plugin.getNpcAttackTracker().recordNpcAnimation(npc, animationId);
+
+            plugin.getNpcAttackTracker().recordNpcAnimation(
+                    npc,
+                    animationId,
+                    bossNpcId -> {
+                        for (NPC candidate : plugin.getClient().getNpcs())
+                        {
+                            if (candidate != null && candidate.getId() == bossNpcId)
+                            {
+                                return candidate;
+                            }
+                        }
+                        return null;
+                    }
+            );
         }
     }
 
@@ -272,8 +282,8 @@ public class AnimationListener
             calculateAndRecordExpectedDamage(fightTracker, playerName, attackStyle);
         }
 
-        log.debug("{} attacked with animation {} (style: {}, weapon speed: {} ticks)",
-                playerName, animationId, attackStyle.getStyle(), attackStyle.getWeaponSpeedTicks());
+        //log.debug("{} attacked with animation {} (style: {}, weapon speed: {} ticks)",
+                //playerName, animationId, attackStyle.getStyle(), attackStyle.getWeaponSpeedTicks());
     }
 
     /**
@@ -358,7 +368,7 @@ public class AnimationListener
             if (playerStats != null)
             {
                 playerStats.addExpectedDamage(expectedDamage);
-                log.debug("Expected damage for {}: {} (style: {})", playerName, expectedDamage, attackStyle.getStyle());
+                //log.debug("Expected damage for {}: {} (style: {})", playerName, expectedDamage, attackStyle.getStyle());
             }
         }
     }

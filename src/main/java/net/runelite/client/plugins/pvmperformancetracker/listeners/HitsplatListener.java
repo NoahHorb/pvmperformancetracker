@@ -370,7 +370,7 @@ public class HitsplatListener
 
         // Check melee prayers
         if (normalized.equals("melee") || normalized.equals("slash") ||
-                normalized.equals("stab") || normalized.equals("crush"))
+                normalized.equals("stab") || normalized.equals("crush") || normalized.equals("axes"))
         {
             return client.isPrayerActive(Prayer.PROTECT_FROM_MELEE);
         }
