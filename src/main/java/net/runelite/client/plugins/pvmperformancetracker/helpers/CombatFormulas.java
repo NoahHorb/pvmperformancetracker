@@ -257,7 +257,7 @@ public class CombatFormulas
      * @param hasCorrectPrayer Whether player has correct prayer active
      * @return Multiplier (1.0 = no reduction, 0.0 = full block, 0.6 = 40% reduction)
      */
-    private double getPrayerReductionMultiplier(NpcCombatStats npcStats, String attackStyle, boolean hasCorrectPrayer)
+    public double getPrayerReductionMultiplier(NpcCombatStats npcStats, String attackStyle, boolean hasCorrectPrayer)
     {
         log.debug("has correct prayer: {}", hasCorrectPrayer);
 
@@ -331,7 +331,7 @@ public class CombatFormulas
     /**
      * Calculate NPC's accuracy against player
      */
-    private double calculateNpcAccuracyAgainstPlayer(NpcCombatStats npcStats, String attackStyle)
+    public double calculateNpcAccuracyAgainstPlayer(NpcCombatStats npcStats, String attackStyle)
     {
         if (npcStats == null)
         {

@@ -12,6 +12,8 @@ import net.runelite.client.party.PartyService;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.pvmperformancetracker.helpers.AttackStyleMapping;
+import net.runelite.client.plugins.pvmperformancetracker.models.Fight;
+import net.runelite.client.plugins.pvmperformancetracker.models.PlayerStats;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -170,6 +172,36 @@ public class PvMPerformanceTrackerPlugin extends Plugin
 		{
 			fightTracker.onGameTick();
 
+
+			if (fightTracker != null && fightTracker.hasActiveFight())
+			{
+				Fight currentFight = fightTracker.getCurrentFight();
+				if (currentFight != null)
+				{
+					String localPlayerName = client.getLocalPlayer() != null
+							? client.getLocalPlayer().getName() : null;
+
+					if (localPlayerName != null)
+					{
+						PlayerStats stats = currentFight.getPlayerStats().get(localPlayerName);
+						if (stats != null)
+						{
+							// Flush hits that landed on the PREVIOUS tick (tick - 1).
+							// client.getTickCount() has already incremented by the time onGameTick fires,
+							// so the "just-completed" tick is currentTick - 1.
+							int justCompletedTick = client.getTickCount() - 1;
+							int hpNow = client.getBoostedSkillLevel(Skill.HITPOINTS);
+							// Note: HP has already been reduced by the hits. For death probability
+							// we ideally want HP *before* the hits. However since we only care about
+							// whether combined damage >= HP-before, and HP-before = HP-now + damage-taken,
+							// we pass hpNow here and PlayerStats.flushPendingDeathCalc handles it.
+							// For precise pre-hit HP, HitsplatListener can capture it at hit time and
+							// store it alongside the PendingHit — see note below.
+							stats.flushPendingDeathCalc(client.getTickCount() - 1);
+						}
+					}
+				}
+			}
 			// Update panel in real-time if there's an active fight
 			// Only update every 2 ticks to reduce overhead
 			if (panel != null && fightTracker.hasActiveFight() && fightTracker.getCurrentTick() % 2 == 0)

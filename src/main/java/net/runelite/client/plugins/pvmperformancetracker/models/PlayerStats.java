@@ -1,5 +1,6 @@
 package net.runelite.client.plugins.pvmperformancetracker.models;
 
+import lombok.extern.slf4j.Slf4j;
 import lombok.Data;
 import net.runelite.client.plugins.pvmperformancetracker.enums.DamageType;
 
@@ -9,6 +10,7 @@ import java.util.List;
 /**
  * Tracks all performance metrics for a single player in a fight
  */
+@Slf4j
 @Data
 public class PlayerStats
 {
@@ -58,6 +60,11 @@ public class PlayerStats
     private boolean isLocalPlayer;
     private Integer firstDamageTick;
     private Integer lastDamageTick;
+
+    // Hits buffered this tick, waiting for combined death-chance calculation.
+    private final List<PendingHit> pendingHits = new ArrayList<>();
+    private int pendingHitTick = -1;  // Tick the pending hits belong to
+    private int pendingHitHp   = -1;  // HP at the time the first hit of this tick arrived
 
     public PlayerStats(String playerName)
     {
@@ -474,6 +481,178 @@ public class PlayerStats
     }
 
     /**
+     * Queue a hit for combined death probability calculation at end of tick.
+     *
+     * @param hit        The hit parameters
+     * @param gameTick   The current game tick
+     * @param currentHp  Player's HP at the moment this hit arrived (pre-damage)
+     */
+    public void queueDeathCalcHit(PendingHit hit, int gameTick, int currentHp)
+    {
+        if (pendingHitTick != gameTick)
+        {
+            // New tick — discard any stale hits from the previous tick.
+            // The authoritative flush already happened (or will happen) in onGameTick/endCurrentFight.
+            pendingHits.clear();
+            pendingHitTick = gameTick;
+            pendingHitHp   = currentHp;  // Capture HP on the first hit of this tick
+        }
+        // Note: do NOT update pendingHitHp on subsequent hits of the same tick —
+        // we want the HP *before any of this tick's hits landed*, which is the
+        // value captured on the first hit.
+        pendingHits.add(hit);
+    }
+
+    /**
+        * Flush pending hits and commit a single combined death-chance entry.
+        * Uses the HP that was captured when the first hit of the tick arrived.
+        *
+        * Call from:
+        *   - PvMPerformanceTrackerPlugin.onGameTick() — normal case
+        *   - FightTracker.endCurrentFight() — fight ends mid-tick (e.g. death)
+        *
+        * @param forTick  Only flushes if pendingHitTick matches this value
+     */
+    public void flushPendingDeathCalc(int forTick)
+    {
+        if (pendingHits.isEmpty() || pendingHitTick != forTick || pendingHitHp == -1)
+        {
+            return;
+        }
+
+        double deathProbability;
+
+        if (pendingHits.size() == 1)
+        {
+            deathProbability = calculateSingleHitDeathProbability(pendingHits.get(0), pendingHitHp);
+        }
+        else
+        {
+            deathProbability = calculateCombinedDeathProbability(pendingHits, pendingHitHp);
+        }
+
+        if (deathProbability > 0.0)
+        {
+            addDeathChance(deathProbability);
+            log.debug("[PlayerStats] Flushed {} pending hit(s) for tick={} hp={}: deathChance={}%",
+                    pendingHits.size(), forTick, pendingHitHp,
+                    String.format("%.2f", deathProbability * 100));
+        }
+
+        pendingHits.clear();
+        pendingHitHp = -1;
+    }
+
+    /**
+     * Single-hit death probability — equivalent to the existing CombatFormulas path
+     * but operating on pre-computed effective min/max.
+     */
+    private double calculateSingleHitDeathProbability(PendingHit h, int currentHp)
+    {
+        if (h.effectiveMaxHit < currentHp)
+        {
+            return 0.0;
+        }
+
+        boolean guaranteed = h.effectiveMinHit > 0;
+        double effectiveHitChance = guaranteed ? 1.0 : h.hitChance;
+
+        if (h.effectiveMinHit >= currentHp)
+        {
+            return effectiveHitChance;
+        }
+
+        int possibleHits = h.effectiveMaxHit - h.effectiveMinHit + 1;
+        int lethalHits   = h.effectiveMaxHit - currentHp + 1;
+        return effectiveHitChance * ((double) lethalHits / possibleHits);
+    }
+
+    /**
+     * Combined death probability for N hits landing on the same tick.
+     *
+     * Algorithm:
+     *   1. Build the probability distribution of the combined damage sum via convolution.
+     *      Each hit i is uniform over [min_i, max_i], weighted by its hit-chance p_i.
+     *      A miss contributes 0 damage with probability (1 - p_i).
+     *   2. P(death) = sum of combined[k] for k >= currentHp.
+     *
+     * This is exact for discrete uniform distributions and O(N * maxSum) in time.
+     *
+     * Example (two axes, [7,17] each, hitChance=0.85, currentHp=30):
+     *   combined distribution spans [0, 34].
+     *   P(combined >= 30) = P(sum in {30,31,32,33,34}).
+     */
+    private double calculateCombinedDeathProbability(List<PendingHit> hits, int currentHp)
+    {
+        // Maximum possible combined damage
+        int maxSum = 0;
+        for (PendingHit h : hits)
+        {
+            maxSum += h.effectiveMaxHit;
+        }
+
+        if (maxSum < currentHp)
+        {
+            // Even all hits at maximum can't kill — no death risk
+            return 0.0;
+        }
+
+        // combined[k] = probability that the sum of all hits equals exactly k
+        // Start with a degenerate distribution: P(sum=0) = 1.0
+        double[] combined = new double[maxSum + 1];
+        combined[0] = 1.0;
+
+        for (PendingHit h : hits)
+        {
+            double[] next = new double[maxSum + 1];
+            int range = h.effectiveMaxHit - h.effectiveMinHit + 1;
+
+            // Attacks with a minimum hit > 0 always land (guaranteed accuracy).
+            // Attacks with no minimum hit (effectiveMinHit == 0) can miss.
+            boolean guaranteed = h.effectiveMinHit > 0;
+            double missProbability       = guaranteed ? 0.0 : (1.0 - h.hitChance);
+            double hitProbabilityPerValue = guaranteed ? (1.0 / range) : (h.hitChance / range);
+
+            for (int prevSum = 0; prevSum <= maxSum; prevSum++)
+            {
+                if (combined[prevSum] == 0.0) continue;
+
+                // Case A: this hit MISSES — contributes 0 damage
+                if (missProbability > 0.0)
+                {
+                    next[prevSum] += combined[prevSum] * missProbability;
+                }
+
+                // Case B: this hit LANDS — contributes uniform [min, max]
+                for (int dmg = h.effectiveMinHit; dmg <= h.effectiveMaxHit; dmg++)
+                {
+                    int newSum = prevSum + dmg;
+                    if (newSum <= maxSum)
+                    {
+                        next[newSum] += combined[prevSum] * hitProbabilityPerValue;
+                    }
+                }
+            }
+
+            combined = next;
+        }
+
+        // P(death) = P(combined sum >= currentHp)
+        double deathProbability = 0.0;
+        for (int k = currentHp; k <= maxSum; k++)
+        {
+            deathProbability += combined[k];
+        }
+
+        log.debug("[PlayerStats] Combined death calc: {} hits, currentHp={}, maxSum={}, P(death)={}%",
+                hits.size(), currentHp, maxSum,
+                String.format("%.2f", deathProbability * 100));
+
+        return deathProbability;
+    }
+
+
+    /**
      * Get cumulative death chance as a percentage
      */
     public double getDeathChancePercentage()
@@ -498,6 +677,22 @@ public class PlayerStats
             this.amount = amount;
             this.target = target;
             this.damageType = DamageType.UNKNOWN;
+        }
+    }
+    @Data
+    public static class PendingHit
+    {
+        public final int    effectiveMinHit;
+        public final int    effectiveMaxHit;
+        public final double hitChance;       // NPC accuracy against player [0,1]
+        public final String style;
+
+        public PendingHit(int effectiveMinHit, int effectiveMaxHit, double hitChance, String style)
+        {
+            this.effectiveMinHit = effectiveMinHit;
+            this.effectiveMaxHit = effectiveMaxHit;
+            this.hitChance       = hitChance;
+            this.style           = style;
         }
     }
 }

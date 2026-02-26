@@ -159,4 +159,9 @@ public class Fight
     {
         return new HashMap<>(playerStats);
     }
+
+    public Map<String, PlayerStats> getPlayerStatsInternal()
+    {
+        return playerStats;  // returns the actual ConcurrentHashMap, not a copy
+    }
 }

@@ -186,7 +186,7 @@ public class HitsplatListener
         int hitsplatType = hitsplat.getHitsplatType();
         int damage       = hitsplat.getAmount();
         int currentTick  = client.getTickCount();
-
+        int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
         log.debug("[HitsplatListener] Incoming player hitsplat: type={} damage={} tick={}",
                 hitsplatType, damage, currentTick);
 
@@ -202,7 +202,7 @@ public class HitsplatListener
             stats.addDamageTaken(damage, currentTick, DamageType.UNAVOIDABLE);
 
             // If this tick's damage meets or exceeds current HP it was a guaranteed kill
-            int currentHp = client.getBoostedSkillLevel(Skill.HITPOINTS);
+
             if (damage >= currentHp)
             {
                 stats.addDeathChance(1.0);
@@ -232,6 +232,7 @@ public class HitsplatListener
         }
 
         // Determine attack style
+        // Determine attack style
         String attackStyleUsed = null;
         if (npcStats != null)
         {
@@ -257,25 +258,63 @@ public class HitsplatListener
         log.debug("[HitsplatListener] Resolved: damage={} style={} tick={} npc={}",
                 damage, attackStyleUsed, currentTick, attackingNpc.getName());
 
-        // Classify, record, and calculate death probability
+        // Classify and record damage
         DamageType damageType = classifyDamage(attackingNpc, damage, attackStyleUsed, npcStats);
         stats.addDamageTaken(damage, currentTick, damageType);
 
         log.debug("[HitsplatListener] Player took {} damage (type={} style={} tick={})",
                 damage, damageType, attackStyleUsed != null ? attackStyleUsed : "unknown", currentTick);
 
+        // Queue death probability calculation (handles same-tick multi-hits via convolution)
         if (npcStats != null && attackStyleUsed != null)
         {
-            double deathProbability = calculateDeathProbability(attackingNpc, attackStyleUsed, npcStats);
-            if (deathProbability > 0.0)
+            PlayerStats.PendingHit pendingHit = buildPendingHit(attackingNpc, attackStyleUsed, npcStats);
+            if (pendingHit != null)
             {
-                stats.addDeathChance(deathProbability);
-                log.debug("[HitsplatListener] Death probability: {}% (rolled {})",
-                        String.format("%.1f", deathProbability * 100), damage);
+                stats.queueDeathCalcHit(pendingHit, currentTick, currentHp);
+                log.debug("[HitsplatListener] Queued death calc hit: style={} min={} max={} hitChance={} hp={} tick={}",
+                        attackStyleUsed, pendingHit.effectiveMinHit, pendingHit.effectiveMaxHit,
+                        String.format("%.3f", pendingHit.hitChance), currentHp, currentTick);
             }
         }
     }
+    /**
+     * Build a PendingHit for queued death probability calculation.
+     * Extracts effective min/max (after prayer) and hit chance from combat stats.
+     * Returns null if this attack has zero death risk (max hit can't reach 1 HP).
+     */
+    private PlayerStats.PendingHit buildPendingHit(NPC attackingNpc, String attackStyleUsed,
+                                                   NpcCombatStats npcStats)
+    {
+        if (attackingNpc == null || npcStats == null || attackStyleUsed == null)
+        {
+            return null;
+        }
 
+        int rawMax = npcStats.getMaxHitForStyle(attackStyleUsed);
+        int rawMin = npcStats.getMinHitForStyle(attackStyleUsed);
+        if (rawMax == 0)
+        {
+            return null;
+        }
+
+        boolean hasCorrectPrayer = isPrayerActiveForStyle(attackStyleUsed);
+        double prayerReduction   = plugin.getCombatFormulas()
+                .getPrayerReductionMultiplier(npcStats, attackStyleUsed, hasCorrectPrayer);
+
+        int effectiveMax = (int) Math.floor(rawMax * prayerReduction);
+        int effectiveMin = (int) Math.floor(rawMin * prayerReduction);
+
+        if (effectiveMax == 0)
+        {
+            return null;
+        }
+
+        double hitChance = plugin.getCombatFormulas()
+                .calculateNpcAccuracyAgainstPlayer(npcStats, attackStyleUsed);
+
+        return new PlayerStats.PendingHit(effectiveMin, effectiveMax, hitChance, attackStyleUsed);
+    }
     /**
      * Returns true for hitsplat types that are known environmental/DoT sources.
 

@@ -99,6 +99,8 @@ public class FightTracker
             return;
         }
 
+
+        flushPendingDeathCalcs(currentFight);
         currentFight.endFight(currentTick);
 
         // Lock current fight stats into Overall's base (so next fight adds to this)
@@ -136,7 +138,22 @@ public class FightTracker
 
         updatePanel();
     }
+    /**
+     * Flush pending death calc hits for all players in a fight.
+     * Called at fight end to ensure same-tick hits aren't lost.
+     */
+    private void flushPendingDeathCalcs(Fight fight)
+    {
+        if (fight == null)
+        {
+            return;
+        }
 
+        for (PlayerStats stats : fight.getPlayerStatsInternal().values())
+        {
+            stats.flushPendingDeathCalc(stats.getPendingHitTick());
+        }
+    }
     /**
      * Reset overall tracking
      */
