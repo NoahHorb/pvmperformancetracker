@@ -175,7 +175,7 @@ public class AttackStyleMapping
         for (int id : eNPC.VARDORVIS)
         {
             registerScheduledDirectAttack(id, AnimationID.NPC_VARDORVIS_01_MELEE_01, "slash", 1);
-            registerMechanic(id, AnimationID.NPC_VARDORVIS_01_DASH_01, "spikes");
+            registerScheduledDirectAttack(id, AnimationID.NPC_VARDORVIS_01_DASH_01, "spikes", 3);
             registerMechanic(id, AnimationID.NPC_VARDORVIS_01_ENTANGLE_START, "strangle");
             registerMechanic    (id, AnimationID.NPC_VARDORVIS_AXE_01_ATTACK_START, "axes");
             registerProjectile  (id, SpotanimID.VFX_VARDORVIS_HEAD_PROJECTILE_MAGIC_01,  "magic");
